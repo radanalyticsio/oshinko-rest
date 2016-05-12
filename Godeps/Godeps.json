@@ -1,0 +1,99 @@
+{
+	"ImportPath": "github.com/redhatanalytics/oshinko-rest",
+	"GoVersion": "go1.5",
+	"GodepVersion": "v66",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/PuerkitoBio/purell",
+			"Comment": "v0.1.0-23-gd69616f",
+			"Rev": "d69616f51cdfcd7514d6a380847a152dfc2a749d"
+		},
+		{
+			"ImportPath": "github.com/asaskevich/govalidator",
+			"Comment": "v3-8-g5b6e937",
+			"Rev": "5b6e9375cbf581a9008064f7216e816b568d6daa"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/analysis",
+			"Rev": "5a8fe2138f95138797c306c07e65e759c55f898f"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/errors",
+			"Rev": "b6a74a9df33099a5a952e7d1dbfe93dfa6b7a076"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/jsonpointer",
+			"Rev": "f5133566e18f23f2085d953998fd72959b698623"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/jsonreference",
+			"Rev": "44d0c05f81b60f99eeb8c188b8983ec82e5d872f"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/loads",
+			"Rev": "3a4490f96e6ea1ba7d66602e70ffca0fc26aa6ca"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/runtime",
+			"Rev": "ad736e5a94df13f128be7b5057606a537c020707"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/runtime/middleware",
+			"Rev": "ad736e5a94df13f128be7b5057606a537c020707"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/runtime/middleware/header",
+			"Rev": "ad736e5a94df13f128be7b5057606a537c020707"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/runtime/middleware/untyped",
+			"Rev": "ad736e5a94df13f128be7b5057606a537c020707"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/spec",
+			"Rev": "1f40fcb077ed32379da3eeb494f76fb2285e31b8"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/strfmt",
+			"Rev": "66a99d45c3043d45d346b1c8db5dc2f76a004869"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/swag",
+			"Rev": "f8ab07bb33bb43a743eb65daf0588ab522e5160f"
+		},
+		{
+			"ImportPath": "github.com/go-openapi/validate",
+			"Rev": "f9db1b89d08ead629cde1e6cab275c329fe89bed"
+		},
+		{
+			"ImportPath": "github.com/gorilla/context",
+			"Comment": "v1.1-2-ga8d44e7",
+			"Rev": "a8d44e7d8e4d532b6a27a02dd82abb31cc1b01bd"
+		},
+		{
+			"ImportPath": "github.com/jessevdk/go-flags",
+			"Comment": "v1-334-g6b9493b",
+			"Rev": "6b9493b3cb60367edd942144879646604089e3f7"
+		},
+		{
+			"ImportPath": "github.com/naoina/denco",
+			"Rev": "9af2ba0e24214bac003821f4a501b131b2e04c75"
+		},
+		{
+			"ImportPath": "github.com/opennota/urlesc",
+			"Rev": "5fa9ff0392746aeae1c4b37fcc42c65afa7a9587"
+		},
+		{
+			"ImportPath": "github.com/tylerb/graceful",
+			"Comment": "v1.2.5",
+			"Rev": "9a3d4236b03bb5d26f7951134d248f9d5510d599"
+		},
+		{
+			"ImportPath": "golang.org/x/net/netutil",
+			"Rev": "2a35e686583654a1b89ca79c4ac78cb3d6529ca3"
+		}
+	]
+}
