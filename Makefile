@@ -9,3 +9,6 @@ install:
 
 deps:
 	godep save ./...
+
+validate-api:
+	swagger validate api/swagger.yaml
