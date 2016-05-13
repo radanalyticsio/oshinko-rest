@@ -1,5 +1,5 @@
 clean:
-	rm -r _output
+	rm -rf _output
 
 build:
 	godep go build -o _output/oshinko-rest-server ./cmd/oshinko-rest-server
@@ -12,3 +12,6 @@ deps:
 
 validate-api:
 	swagger validate api/swagger.yaml
+
+image:
+	docker build -t oshinko-rest-server .
