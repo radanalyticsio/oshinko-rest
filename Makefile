@@ -2,7 +2,7 @@ clean:
 	rm -rf _output
 
 build:
-	godep go build -o _output/oshinko-rest-server ./cmd/oshinko-rest-server
+	tools/build.sh
 
 install:
 	godep go install ./cmd/oshinko-rest-server
