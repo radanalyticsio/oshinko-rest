@@ -2,10 +2,10 @@ clean:
 	rm -rf _output
 
 build:
-	tools/build.sh
+	tools/build.sh build
 
 install:
-	godep go install ./cmd/oshinko-rest-server
+	tools/build.sh install
 
 deps:
 	godep save ./...
