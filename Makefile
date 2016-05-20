@@ -8,7 +8,7 @@ install:
 	tools/build.sh install
 
 deps:
-	godep save ./...
+	export GO15VENDOREXPERIMENT=1 ; godep save ./...
 
 validate-api:
 	swagger validate api/swagger.yaml
