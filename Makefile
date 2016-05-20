@@ -15,3 +15,9 @@ validate-api:
 
 image:
 	docker build -t oshinko-rest-server .
+
+generate-server:
+	swagger generate server -f api/swagger.yaml -A oshinko-rest
+
+generate-client:
+	swagger generate client -f api/swagger.yaml -A oshinko-rest
