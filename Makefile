@@ -1,8 +1,8 @@
-clean:
-	rm -rf _output
-
 build:
 	tools/build.sh build
+
+clean:
+	rm -rf _output
 
 install:
 	tools/build.sh install
