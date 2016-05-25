@@ -7,6 +7,9 @@ clean:
 install:
 	tools/build.sh install
 
+test:
+	tools/build.sh test
+
 deps:
 	export GO15VENDOREXPERIMENT=1 ; godep save ./...
 
