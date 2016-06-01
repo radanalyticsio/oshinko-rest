@@ -22,3 +22,16 @@ investigate when looking to add functionality:
 * godep, https://github.com/tools/godep
 * go-swagger, https://github.com/go-swagger/go-swagger (only needed for
   validating the api file)
+
+### Running as a Docker container
+
+To run the rest server as a container, use the `make image` target to build a
+container image. With the image built, it can be started from the command
+line using a syntax similar to:
+
+    $ docker run --rm -it -p 8080:8080 oshinko-rest-server
+
+This will start the server listening on `0.0.0.0:8080`, which is the default
+option. To customize this behavior, the environment variables
+`OSHINKO_SERVER_HOST` and `OSHINKO_SERVER_PORT` can be specified to the
+`docker run` command to specify an address and port, respectively.

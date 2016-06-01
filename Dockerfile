@@ -9,6 +9,4 @@ RUN go get github.com/tools/godep
 WORKDIR /go/src/github.com/redhatanalytics/oshinko-rest
 RUN make install
 
-ENTRYPOINT /go/bin/oshinko-rest-server --host 0.0.0.0 --port 8080
-
-EXPOSE 8080
+ENTRYPOINT /go/src/github.com/redhatanalytics/oshinko-rest/tools/start_server.sh
