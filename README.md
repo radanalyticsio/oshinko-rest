@@ -31,7 +31,7 @@ line using a syntax similar to:
 
     $ docker run --rm -it -p 8080:8080 oshinko-rest-server
 
-This will start the server listening on `0.0.0.0:8080`, which is the default
-option. To customize this behavior, the environment variables
+This will start the server listening on `0.0.0.0:8080`, which is the 
+default option. To customize this behavior, the environment variables
 `OSHINKO_SERVER_HOST` and `OSHINKO_SERVER_PORT` can be specified to the
 `docker run` command to specify an address and port, respectively.
