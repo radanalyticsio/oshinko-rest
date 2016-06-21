@@ -96,7 +96,7 @@ objects:
   metadata:
     name: ${OSHINKO_WEB_NAME}
     labels:
-      name: ${OSHINKO_WEB_NAME} 
+      name: ${OSHINKO_WEB_NAME}
   spec:
     ports:
       - name: o-web-port
@@ -111,7 +111,7 @@ objects:
   metadata:
     name: ${OSHINKO_WEB_NAME}
   spec:
-    host: ${OSHINKO_WEB_EXTERNAL_IP}
+    host: ${OSHINKO_ROUTER_IP}
     to:
       kind: Service
       name: ${OSHINKO_WEB_NAME}
@@ -137,5 +137,7 @@ parameters:
 - name: OSHINKO_WEB_IMAGE
   description: Full name of the oshino web image
   required: true
-- name: OSHINKO_WEB_EXTERNAL_IP
+- name: OSHINKO_ROUTER_IP
+  description: |-
+    The IP address of the OpenShift router that will serve the oshinko pods
   required: true
