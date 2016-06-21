@@ -111,7 +111,7 @@ objects:
   metadata:
     name: ${OSHINKO_WEB_NAME}
   spec:
-    host: ${OSHINKO_ROUTER_IP}
+    host: ${OSHINKO_WEB_EXTERNAL_IP}
     to:
       kind: Service
       name: ${OSHINKO_WEB_NAME}
@@ -137,7 +137,6 @@ parameters:
 - name: OSHINKO_WEB_IMAGE
   description: Full name of the oshino web image
   required: true
-- name: OSHINKO_ROUTER_IP
-  description: |-
-    The IP address of the OpenShift router that will serve the oshinko pods
+- name: OSHINKO_WEB_EXTERNAL_IP
+  description: The IP address applied to the external route for the webui
   required: true
