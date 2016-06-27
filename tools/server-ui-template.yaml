@@ -29,6 +29,7 @@ objects:
       type: Rolling
     triggers:
       - type: ConfigChange
+      - type: ImageChange
     replicas: 1
     selector:
       name: ${OSHINKO_SERVER_NAME}
@@ -73,6 +74,7 @@ objects:
       type: Rolling
     triggers:
       - type: ConfigChange
+      - type: ImageChange
     template:
       metadata:
         labels:
