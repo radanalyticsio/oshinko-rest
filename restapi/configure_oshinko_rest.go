@@ -4,8 +4,9 @@ import (
 	"crypto/tls"
 	"net/http"
 
-	errors "github.com/go-openapi/errors"
-	runtime "github.com/go-openapi/runtime"
+	"github.com/go-openapi/errors"
+	"github.com/go-openapi/runtime"
+	"github.com/go-openapi/swag"
 
 	"github.com/redhatanalytics/oshinko-rest/handlers"
 	"github.com/redhatanalytics/oshinko-rest/helpers/logging"
@@ -16,8 +17,17 @@ import (
 
 // This file is safe to edit. Once it exists it will not be overwritten
 
+type oshinkoOptions struct {
+	LogFile string `long:"log-file" description:"the file to write logs into, defaults to stdout"`
+}
+
 func configureFlags(api *operations.OshinkoRestAPI) {
-	// api.CommandLineOptionsGroups = []swag.CommandLineOptionsGroup{ ... }
+	api.CommandLineOptionsGroups = []swag.CommandLineOptionsGroup{
+		{
+			ShortDescription: "Oshinko REST server options",
+			Options:          &oshinkoOptions{},
+		},
+	}
 }
 
 func configureAPI(api *operations.OshinkoRestAPI) http.Handler {
@@ -36,6 +46,15 @@ func configureAPI(api *operations.OshinkoRestAPI) http.Handler {
 	api.ClustersUpdateSingleClusterHandler = clusters.UpdateSingleClusterHandlerFunc(handlers.UpdateSingleClusterResponse)
 
 	api.ServerShutdown = func() {}
+
+	for _, optsGroup := range api.CommandLineOptionsGroups {
+		if optsGroup.Options.(*oshinkoOptions).LogFile != "" {
+			err := logging.SetLoggerFile(optsGroup.Options.(*oshinkoOptions).LogFile)
+			if err != nil {
+				logging.GetLogger().Println("unable to set log file;", err)
+			}
+		}
+	}
 
 	return setupGlobalMiddleware(api.Serve(setupMiddlewares))
 }
