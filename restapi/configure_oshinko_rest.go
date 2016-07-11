@@ -48,10 +48,13 @@ func configureAPI(api *operations.OshinkoRestAPI) http.Handler {
 	api.ServerShutdown = func() {}
 
 	for _, optsGroup := range api.CommandLineOptionsGroups {
-		if optsGroup.Options.(*oshinkoOptions).LogFile != "" {
-			err := logging.SetLoggerFile(optsGroup.Options.(*oshinkoOptions).LogFile)
-			if err != nil {
-				logging.GetLogger().Println("unable to set log file;", err)
+		opts, ok := optsGroup.Options.(*oshinkoOptions)
+		if ok == true {
+			if opts.LogFile != "" {
+				err := logging.SetLoggerFile(optsGroup.Options.(*oshinkoOptions).LogFile)
+				if err != nil {
+					logging.GetLogger().Println("unable to set log file;", err)
+				}
 			}
 		}
 	}
