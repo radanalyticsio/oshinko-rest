@@ -22,9 +22,9 @@ func GetLogger() *log.Logger {
 	return logger
 }
 
-// SetLoggerFile changes the logging destination to a file. It will produce
-// errors if a logger is already active, or the file cannot be opened for
-// appending.
+// SetLoggerFile changes the logging destination to a file. If a logger
+// is already active, or the file cannot be opened, then the stderr logger
+// will be used and an error will be returned.
 func SetLoggerFile(filename string) (err error) {
 	if logger == nil {
 		var fp *os.File
