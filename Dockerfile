@@ -4,8 +4,6 @@ FROM golang
 
 ADD . /go/src/github.com/redhatanalytics/oshinko-rest
 
-RUN go get github.com/tools/godep
-
 WORKDIR /go/src/github.com/redhatanalytics/oshinko-rest
 RUN make install
 
