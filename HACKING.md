@@ -1,4 +1,4 @@
-## Running oshinko-rest outside of openshift
+## Running outside of openshift
 
 It's possible to run oshinko-rest locally; this can be a
 big help during development and debugging.
@@ -35,7 +35,7 @@ instructions for building/installing.
 
 Assuming that delve is installed on your local system, and you are
 set up to run oshinko-rest locally as described above in
-[Title](##running-oshinko-rest-outside-of-openshift), here is a simple
+[Running outside of openshift](##running-outside-of-openshift), here is a simple
 overview of how to get going with delve to debug oshinko-rest.
 
 Delve can handle vendoring but you must set the flag in the env:
