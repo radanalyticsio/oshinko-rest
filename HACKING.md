@@ -8,14 +8,15 @@ To do this make a file to setup the env, for instance:
     $ more oshinko-env
     export GOPATH=/home/oshinko-fork/
     export OSHINKO_CLUSTER_NAMESPACE="spark"
-    export OSHINKO_KUBE_CONFIG="/home/tmckay/.kube/config"
-    export OSHINKO_CLUSTER_IMAGE="172.30.122.181:5000/spark/openshift-spark"
+    export OSHINKO_KUBE_CONFIG="/home/user/.kube/config"
+    export OSHINKO_CLUSTER_IMAGE="myrepo/openshift-spark"
 
 This is a convenience that sets the GOPATH, tells oshinko-rest what openshift
 project it will be running in, gives it a path to a valid kube config file
-that it will use for authentication, and tells it what image to use for
-creating spark clusters. (These env values are usually handled via the
-template that launches oshinko-rest in openshift).
+that it will use for communication with the openshift server, and tells it
+what docker image from an accessible repo to use for creating spark clusters.
+(These env values are usually handled via the template that launches
+oshinko-rest in openshift).
 
 **Note**, you must also log in to the appropriate openshift user
 account before running oshinko-rest with this setup:
