@@ -21,6 +21,8 @@ directory. For an `install` target, the binary will be placed in your
 For most functionality an OpenShift cluster will be needed, but the
 application can be tested for basic operation without one.
 
+**Example**
+
 After building the binary a basic test can be performed as follows:
 
 * start the server in a terminal
