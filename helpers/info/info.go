@@ -82,7 +82,3 @@ func GetServiceAccountNS() ([]byte, error) {
 func GetWebServiceName() string {
 	return os.Getenv("OSHINKO_WEB_NAME")
 }
-
-func GetWebServiceURL() string {
-	return "http://totally.fake.testing.com"
-}
