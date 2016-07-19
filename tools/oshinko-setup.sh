@@ -18,9 +18,6 @@ rpm -qa | grep -qw wget || sudo yum -y install wget
 ############ get the oshinko repos and build the images
 
 sudo systemctl start docker 
-# turn on the git credential cache if you like and 
-# you're using https to clone as below
-# git config --global credential.helper cache
 
 CURRDIR=`pwd`
 export GOPATH=$CURRDIR/oshinko
@@ -29,16 +26,16 @@ SRCDIR=$CURRDIR/oshinko/src/github.com/redhatanalytics
 mkdir -p $SRCDIR
 cd $SRCDIR
 if [ ! -d "oshinko-rest" ]; then
-    git clone https://github.com/redhatanalytics/oshinko-rest
+    git clone git@github.com:redhatanalytics/oshinko-rest
 fi
 if [ ! -d "oshinko-webui" ]; then
-    git clone https://github.com/redhatanalytics/oshinko-webui
+    git clone git@github.com:redhatanalytics/oshinko-webui
 fi
 if [ ! -d "openshift-spark" ]; then
-    git clone https://github.com/redhatanalytics/openshift-spark
+    git clone git@github.com:redhatanalytics/openshift-spark
 fi
 if [ ! -d "oshinko-s2i" ]; then
-    git clone https://github.com/redhatanalytics/oshinko-s2i
+    git clone git@github.com:redhatanalytics/oshinko-s2i
 fi
 
 cd $SRCDIR/oshinko-rest; sudo make image
@@ -49,7 +46,7 @@ cd $SRCDIR/oshinko-s2i; make build
 # have to download each time. Maybe we can check for current images? 
 cd $SRCDIR/openshift-spark; sudo make build
 
-########### get the origin image and run oc cluster up #############
+########### get the origin image and run oc cluster up
 ########### this part can be replaced with some other openshift install recipe
 
 if [ ! -d "openshift-spark" ]; then
@@ -70,8 +67,11 @@ sudo oc cluster up
 # Get the address of the docker registry so we can push our images to it
 sudo oc login -u system:admin
 sudo oc project default
-REGISTRY=$(sudo oc get service docker-registry --no-headers=true | awk -F ' ' '{print $2":"$4}' | sed "s,/TCP$,,")
-ROUTERIP=$(sudo oc get service router --no-headers=true | awk -F ' ' '{print $2}')
+#REGISTRY=$(sudo oc get service docker-registry --no-headers=true | awk -F ' ' '{print $2":"$4}' | sed "s,/TCP$,,")
+#ROUTERIP=$(sudo oc get service router --no-headers=true | awk -F ' ' '{print $2}')
+
+REGISTRY=$(sudo oc get service docker-registry --template='{{index .spec.clusterIP}}:{{index .spec.ports 0 "port"}}')
+ROUTERIP=$(sudo oc get service router --template='{{index .spec.clusterIP}}')
 
 # Push to a default oshinko project for a default oshinko user
 oc login -u oshinko -p oshinko
@@ -104,5 +104,5 @@ oc process -f tools/server-ui-template.yaml \
 OSHINKO_SERVER_IMAGE=$REGISTRY/oshinko/oshinko-rest-server \
 OSHINKO_CLUSTER_IMAGE=$REGISTRY/oshinko/openshift-spark \
 OSHINKO_WEB_IMAGE=$REGISTRY/oshinko/oshinko-webui \
-OSHINKO_WEB_EXTERNAL_IP=mywebui.$WEBROUTEIP.xip.io \
-| oc create -f -
+OSHINKO_WEB_EXTERNAL_IP=mywebui.$WEBROUTEIP.xip.io > $CURRDIR/oshinko-template.json
+oc create -f $CURRDIR/oshinko-template.json
