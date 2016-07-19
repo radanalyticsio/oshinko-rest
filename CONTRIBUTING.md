@@ -74,7 +74,7 @@ the tests, or use the `tools/test.sh` script to run them individually.
 
 ### Example unit test
 
-This example shows a simple test being added a to file named
+This example shows a simple test being added to a file named
 `tests/unit/example_test.go`.
 
 ```
