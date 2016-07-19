@@ -15,16 +15,14 @@ func (s *OshinkoUnitTestSuite) TestCreatePodTemplateSpec(c *check.C) {
 	c.Assert(*newPodTemplateSpec, check.FitsTypeOf, podtemplates.OPodTemplateSpec{})
 }
 
-func (s *OshinkoUnitTestSuite) TestSetLabels(c *check.C) {
+func (s *OshinkoUnitTestSuite) TestPodTemplateSetLabels(c *check.C) {
 	expectedLabels := map[string]string{"test": "value"}
 	newPodTemplateSpec := podtemplates.PodTemplateSpec()
 	newPodTemplateSpec.SetLabels(expectedLabels)
 	c.Assert(newPodTemplateSpec.PodTemplateSpec.GetLabels(), check.DeepEquals, expectedLabels)
 }
 
-// This function is named TestSetLabel because there is another function
-// named TestLabel.
-func (s *OshinkoUnitTestSuite) TestSetLabel(c *check.C) {
+func (s *OshinkoUnitTestSuite) TestPodTemplateLabel(c *check.C) {
 	expectedLabels := map[string]string{"test": "value"}
 	newPodTemplateSpec := podtemplates.PodTemplateSpec()
 	newPodTemplateSpec.SetLabels(map[string]string{})

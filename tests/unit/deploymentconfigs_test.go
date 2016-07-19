@@ -30,14 +30,14 @@ func (s *OshinkoUnitTestSuite) TestLabel(c *check.C) {
 	c.Assert(newDeploymentConfig.Labels[expectedName], check.Equals, expectedLabel)
 }
 
-func (s *OshinkoUnitTestSuite) TestPodSelector(c *check.C) {
+func (s *OshinkoUnitTestSuite) TestDeploymentPodSelector(c *check.C) {
 	expectedSelector, expectedValue := "testselector", "testvalue"
 	newDeploymentConfig := deploymentconfigs.DeploymentConfig("name", "namespace")
 	newDeploymentConfig.PodSelector(expectedSelector, expectedValue)
 	c.Assert(newDeploymentConfig.Spec.Selector[expectedSelector], check.Equals, expectedValue)
 }
 
-func (s *OshinkoUnitTestSuite) TestPodSelectors(c *check.C) {
+func (s *OshinkoUnitTestSuite) TestDeploymentPodSelectors(c *check.C) {
 	expectedSelectors := map[string]string{"selector1": "value1", "selector2": "value2"}
 	newDeploymentConfig := deploymentconfigs.DeploymentConfig("name", "namespace")
 	newDeploymentConfig.PodSelectors(expectedSelectors)

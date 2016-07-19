@@ -55,17 +55,17 @@ func (s *OshinkoUnitTestSuite) TestResourceRequest(c *check.C) {
 	c.Assert(newContainer.Resources.Requests[expectedName], check.DeepEquals, expectedQuantity)
 }
 
-func (s *OshinkoUnitTestSuite) TestPorts(c *check.C) {
+func (s *OshinkoUnitTestSuite) TestContainerPorts(c *check.C) {
 	containerPorts := []*containers.OContainerPort{
 		containers.ContainerPort("port1", 1),
 		containers.ContainerPort("port2", 2)}
 	newContainer := containers.Container("name", "image")
 	newContainer.Ports(containerPorts[0], containerPorts[1])
-	kports := make([]kapi.ContainerPort, len(containerPorts))
+	expectedPorts := make([]kapi.ContainerPort, len(containerPorts))
 	for idx, p := range containerPorts {
-		kports[idx] = p.ContainerPort
+		expectedPorts[idx] = p.ContainerPort
 	}
-	c.Assert(newContainer.Container.Ports, check.DeepEquals, kports)
+	c.Assert(newContainer.Container.Ports, check.DeepEquals, expectedPorts)
 }
 
 func (s *OshinkoUnitTestSuite) TestContainerPort(c *check.C) {
