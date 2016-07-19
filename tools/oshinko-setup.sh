@@ -67,9 +67,6 @@ sudo oc cluster up
 # Get the address of the docker registry so we can push our images to it
 sudo oc login -u system:admin
 sudo oc project default
-#REGISTRY=$(sudo oc get service docker-registry --no-headers=true | awk -F ' ' '{print $2":"$4}' | sed "s,/TCP$,,")
-#ROUTERIP=$(sudo oc get service router --no-headers=true | awk -F ' ' '{print $2}')
-
 REGISTRY=$(sudo oc get service docker-registry --template='{{index .spec.clusterIP}}:{{index .spec.ports 0 "port"}}')
 ROUTERIP=$(sudo oc get service router --template='{{index .spec.clusterIP}}')
 
