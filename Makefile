@@ -10,7 +10,7 @@ install:
 	tools/build.sh install
 
 test:
-	tools/build.sh test
+	tools/test.sh all
 
 validate-api:
 	swagger validate api/swagger.yaml
