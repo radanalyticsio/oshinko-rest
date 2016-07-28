@@ -536,9 +536,13 @@ func FindClustersResponse(params clusters.FindClustersParams) middleware.Respond
 
 			// TODO we only want to count running pods (not terminating)
 			citem.WorkerCount = toint64ptr(cnt)
-			// TODO make something real for status
-			citem.Status = tostrptr("Running")
 			citem.MasterURL = tostrptr(retrieveMasterURL(sc, clustername))
+			// TODO make something real for status
+			if *citem.MasterURL == "" {
+				citem.Status = tostrptr("MasterServiceMissing")
+			} else {
+				citem.Status = tostrptr("Running")
+			}
 			payload.Clusters = append(payload.Clusters, citem)
 		}
 	}
