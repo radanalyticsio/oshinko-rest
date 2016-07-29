@@ -59,6 +59,11 @@ func (c *OContainer) Ports(ports ...*OContainerPort) *OContainer {
 	return c
 }
 
+func (c *OContainer) SetLivenessProbe(probe kapi.Probe) *OContainer {
+	c.LivenessProbe = &probe
+	return c
+}
+
 type OContainerPort struct {
 	kapi.ContainerPort
 }
