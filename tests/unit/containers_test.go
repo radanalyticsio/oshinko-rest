@@ -113,3 +113,13 @@ func (s *OshinkoUnitTestSuite) TestSetLivenessProbe(c *check.C) {
 	c.Assert(newContainer.LivenessProbe.Handler.HTTPGet.Port.IntValue(),
 		check.Equals, expectedPort)
 }
+
+func (s *OshinkoUnitTestSuite) TestSetReadinessProbe(c *check.C) {
+	newContainer := containers.Container("name", "image")
+	expectedPort := 8080
+	expectedProbe := probes.NewHTTPGetProbe(expectedPort)
+	newContainer.SetReadinessProbe(expectedProbe)
+	c.Assert(newContainer.ReadinessProbe, check.DeepEquals, &expectedProbe)
+	c.Assert(newContainer.ReadinessProbe.Handler.HTTPGet.Port.IntValue(),
+		check.Equals, expectedPort)
+}
