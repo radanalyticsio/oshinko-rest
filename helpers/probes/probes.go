@@ -6,7 +6,7 @@ import (
 )
 
 // NewHTTPGetProbe returns a probe object configured for HTTPGet actions,
-// it currently only the single required parameter.
+// it currently only accepts the single required parameter.
 func NewHTTPGetProbe(port int) kapi.Probe {
 	act := kapi.HTTPGetAction{Port: intstr.FromInt(port)}
 	hnd := kapi.Handler{HTTPGet: &act}
