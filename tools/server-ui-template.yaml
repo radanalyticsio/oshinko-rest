@@ -177,4 +177,3 @@ parameters:
   required: true
 - name: OSHINKO_WEB_EXTERNAL_IP
   description: The IP address applied to the external route for the webui
-  required: true
