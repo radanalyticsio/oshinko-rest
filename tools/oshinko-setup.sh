@@ -119,7 +119,7 @@ oc process -f tools/server-ui-template.yaml \
 OSHINKO_SERVER_IMAGE=$REGISTRY/oshinko/oshinko-rest-server \
 OSHINKO_CLUSTER_IMAGE=$REGISTRY/oshinko/openshift-spark \
 OSHINKO_WEB_IMAGE=$REGISTRY/oshinko/oshinko-webui \
-OSHINKO_WEB_EXTERNAL_IP=$ROUTEVALUE > $CURRDIR/oshinko-template.json
+OSHINKO_WEB_ROUTE_HOSTNAME=$ROUTEVALUE > $CURRDIR/oshinko-template.json
 
 oc create -f $CURRDIR/oshinko-template.json
 
