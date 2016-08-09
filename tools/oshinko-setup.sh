@@ -113,6 +113,11 @@ sudo docker push $REGISTRY/oshinko/daikon-pyspark
 oc create sa oshinko                          # note, VV, first oshinko is the proj name :)
 oc policy add-role-to-user admin system:serviceaccount:oshinko:oshinko -n oshinko
 
+# this became necessary in v1.3.0-alpha.3
+# without it, builds in pods will fail to push to the integrated registry
+# (there may be a better solution to this)
+oc policy add-role-to-group system:image-puller system:unauthenticated -n oshinko
+
 # process the standard oshinko template and launch it
 if [ -n "$WEBROUTE" ] ; then
     ROUTEVALUE=$WEBROUTE
