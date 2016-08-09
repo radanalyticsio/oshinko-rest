@@ -63,11 +63,14 @@ cd $SRCDIR/openshift-spark; sudo make build
 ########### this part can be replaced with some other openshift install recipe
 
 cd $CURRDIR
+ORIGIN_VERSION=v1.3.0-alpha.3
+ORIGIN_TARBALL=openshift-origin-server-v1.3.0-alpha.3-7998ae4-linux-64bit.tar.gz
+ORIGIN_DIR=${ORIGIN_TARBALL%.tar.gz}
 
-if [ ! -d "openshift-origin-server-v1.3.0-alpha.3-7998ae4-linux-64bit" ]; then
-    wget https://github.com/openshift/origin/releases/download/v1.3.0-alpha.3/openshift-origin-server-v1.3.0-alpha.3-7998ae4-linux-64bit.tar.gz
-    tar -xvzf openshift-origin-server-v1.3.0-alpha.3-7998ae4-linux-64bit.tar.gz
-    sudo cp openshift-origin-server-v1.3.0-alpha.3-7998ae4-linux-64bit/* /usr/bin
+if [ ! -d "$ORIGIN_DIR" ]; then
+    wget https://github.com/openshift/origin/releases/download/$ORIGIN_VERSION/$ORIGIN_TARBALL
+    tar -xvzf $ORIGIN_TARBALL
+    sudo cp ${ORIGIN_DIR}/* /usr/bin
 fi
 
 sudo sed -i "s/# INSECURE_REGISTRY='--insecure-registry '/INSECURE_REGISTRY='--insecure-registry 172.30.0.0\/16'/" /etc/sysconfig/docker
