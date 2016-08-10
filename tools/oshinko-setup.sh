@@ -44,8 +44,8 @@ fi
 if [ ! -d "oshinko-webui" ]; then
     git clone git@github.com:redhatanalytics/oshinko-webui
 fi
-if [ ! -d "openshift-spark" ]; then
-    git clone git@github.com:redhatanalytics/openshift-spark
+if [ ! -d "xpaas-spark" ]; then
+    git clone git@github.com:redhatanalytics/xpaas-spark
 fi
 if [ ! -d "oshinko-s2i" ]; then
     git clone git@github.com:redhatanalytics/oshinko-s2i
@@ -57,7 +57,44 @@ cd $SRCDIR/oshinko-s2i; make build
 
 # this works but it can probably be smarter .. maybe hadoop doesn't
 # have to download each time. Maybe we can check for current images? 
-cd $SRCDIR/openshift-spark; sudo make build
+
+# Build xpaas-spark image
+cd $SRCDIR/xpaas-spark
+# Modify /etc/sysconfig/docker, if necessary
+BREW_REGISTRY="brew-pulp-docker01.web.prod.ext.phx2.redhat.com:8888"
+INSECURE_CONFIG=$(grep -c "^INSECURE_REGISTRY=" /etc/sysconfig/docker)
+if [ $INSECURE_CONFIG -gt 0 ]; then
+    EXISTING_VALUE=$(grep -c "^INSECURE_REGISTRY.*$BREW_REGISTRY" /etc/sysconfig/docker)
+    if [ $EXISTING_VALUE -eq 0 ]; then
+        echo "Adding $BREW_REGISTRY to INSECURE_REGISTRY config"
+        sudo sed -i "s/INSECURE_REGISTRY='\(--insecure-registry .*\)'/INSECURE_REGISTRY='\1 --insecure-registry $BREW_REGISTRY'/g" /etc/sysconfig/docker
+    else
+        echo "$BREW_REGISTRY already present in INSECURE_CONFIG, not modifying config setting"
+    fi
+else
+    echo "Adding INSECURE_REGISTRY config with value of $BREW_REGISTRY"
+    echo "INSECURE_REGISTRY='--insecure-registry $BREW_REGISTRY'" >> /etc/sysconfig/docker
+fi
+OPTIONS_CONFIG=$(grep -c "^OPTIONS=" /etc/sysconfig/docker)
+if [ $OPTIONS_CONFIG -gt 0 ]; then
+    EXISTING_VALUE=$(grep -c "^OPTIONS.*$BREW_REGISTRY" /etc/sysconfig/docker)
+    if [ $EXISTING_VALUE -eq 0 ]; then
+        echo "Adding $BREW_REGISTRY to OPTIONS config"
+        sudo sed -i "s/OPTIONS='\(.*\)'/OPTIONS='\1 --add-registry $BREW_REGISTRY'/g" /etc/sysconfig/docker
+    else
+        echo "$BREW_REGISTRY already present in OPTIONS, not modifying config setting"
+    fi
+else
+    echo "Adding OPTIONS config with value of --add-registry $BREW_REGISTRY"
+    echo "OPTIONS='--add-registry $BREW_REGISTRY'" >> /etc/sysconfig/docker
+fi
+sudo systemctl restart docker
+git submodule init
+GIT_SSL_NO_VERIFY=true git submodule update jboss-dockerfiles
+./jboss-dockerfiles/tools/generate.sh image.yaml target
+cd target
+docker build -t xpaas-spark .
+
 
 ########### get the origin image and run oc cluster up
 ########### this part can be replaced with some other openshift install recipe
@@ -104,8 +141,8 @@ sudo docker tag oshinko-rest-server $REGISTRY/oshinko/oshinko-rest-server
 sudo docker push $REGISTRY/oshinko/oshinko-rest-server
 sudo docker tag oshinko-webui $REGISTRY/oshinko/oshinko-webui
 sudo docker push $REGISTRY/oshinko/oshinko-webui
-sudo docker tag openshift-spark $REGISTRY/oshinko/openshift-spark
-sudo docker push $REGISTRY/oshinko/openshift-spark
+sudo docker tag xpaas-spark $REGISTRY/oshinko/xpaas-spark
+sudo docker push $REGISTRY/oshinko/xpaas-spark
 sudo docker tag daikon-pyspark $REGISTRY/oshinko/daikon-pyspark
 sudo docker push $REGISTRY/oshinko/daikon-pyspark
 
@@ -122,11 +159,11 @@ cd $SRCDIR/oshinko-rest
 
 oc process -f tools/server-ui-template.yaml \
 OSHINKO_SERVER_IMAGE=$REGISTRY/oshinko/oshinko-rest-server \
-OSHINKO_CLUSTER_IMAGE=$REGISTRY/oshinko/openshift-spark \
+OSHINKO_CLUSTER_IMAGE=$REGISTRY/oshinko/xpaas-spark \
 OSHINKO_WEB_IMAGE=$REGISTRY/oshinko/oshinko-webui \
 OSHINKO_WEB_ROUTE_HOSTNAME=$ROUTEVALUE > $CURRDIR/oshinko-template.json
 
 oc create -f $CURRDIR/oshinko-template.json
 
 # Add the s2I template
-oc create -f $SRCDIR/oshinko-s2i/pyspark/pyspark.json
+oc create -f $SRCDIR/oshinko-s2i/pyspark/pysparkdc.json
