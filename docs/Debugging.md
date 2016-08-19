@@ -15,7 +15,7 @@ additional instructions that may be needed in order to successfully
 build each of the projects.
 
 When using ‘make image’ to generate the docker images that will become
-the Oshinko services you receive the following: **Cannot connect to the
+the Oshinko services, if you receive the following: **Cannot connect to the
 Docker daemon. Is 'docker -d' running on this host?**
 
 Be sure that docker is indeed running on the host. If it is, it may be
@@ -63,6 +63,7 @@ to check the logs for the oshinko-webui pod.  If you see `ENOTFOUND`,
 you first want to be sure that oshinko-rest is up and running.  If it
 is up and running, you may have a skydns issue where you are unable
 to resolve dns references of services by name.
+
 As a debugging test, you can try the following from a terminal inside
 the pod running oshinko-webui.
 `curl http://<oshinko rest service name>:8080`
