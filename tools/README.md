@@ -75,7 +75,7 @@ Example usage:
   
 This will setup a cluster and install oshinko with the oshinko web ui
 accessible at mywebui.10.16.40.70.xip.io (using xip.io is a way to
-get DNS to resolve to the IP (10.16.40.70 in the example).  You would
+get DNS to resolve to the IP, 10.16.40.70 in the example).  You would
 need to use a routeable IP address of your machine.
 
     $ oshinko-setup.sh -w myweb.10.16.40.70.xip.io -s myregistry.com:5000/sparkimage
