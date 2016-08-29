@@ -72,7 +72,7 @@ the `oc cluster up` command.
 Example usage:
 
     $ oshinko-setup.sh -w mywebui.10.16.40.70.xip.io
-  
+
 This will setup a cluster and install oshinko with the oshinko web ui
 accessible at mywebui.10.16.40.70.xip.io (using xip.io is a way to
 get DNS to resolve to the IP, 10.16.40.70 in the example).  You would
@@ -106,8 +106,9 @@ without an escalation of privileges.
 
 example usage:
 
-    $ ./oshinko-deploy.sh -w myweb.10.16.40.70.xip.io -s myregistry.com:5000/sparkimage -p myproject
+    $ ./oshinko-deploy.sh -w myweb.10.16.40.70.xip.io -s myregistry.com:5000/sparkimage -p myproject -u developer
 
-Running this will deploy oshinko into the project `myproject`, it will expose
-the webui at `http://myweb.10.16.40.70.xio.io`, and oshinko will use the
-spark image from `myregistry.com:5000/sparkimage` as the base for deployment.
+Running this will deploy oshinko into the project `myproject` using the
+`developer` user, it will expose the webui at
+`http://myweb.10.16.40.70.xio.io`, and oshinko will use the spark image from
+`myregistry.com:5000/sparkimage` as the base for deployment.
