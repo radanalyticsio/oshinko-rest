@@ -75,13 +75,6 @@ func configureTLS(tlsConfig *tls.Config) {
 // The middleware configuration is for the handler executors. These do not apply to the swagger.json document.
 // The middleware executes after routing but before authentication, binding and validation
 func setupMiddlewares(handler http.Handler) http.Handler {
-	corsHeaders := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowCredentials: true,
-		AllowedMethods: []string{"GET", "HEAD", "POST", "DELETE", "PUT", "OPTIONS"},
-		OptionsPassthrough: false,
-	})
-	handler = corsHeaders.Handler(handler)
 	return handler
 }
 
@@ -91,5 +84,9 @@ func setupGlobalMiddleware(handler http.Handler) (finalHandler http.Handler) {
 	finalHandler = handler
 	finalHandler = oe.AddErrorHandler(finalHandler)
 	finalHandler = logging.AddLoggingHandler(finalHandler)
+	corsHeaders := cors.New(cors.Options{
+		AllowedMethods: []string{"GET", "HEAD", "POST", "DELETE", "PUT", "OPTIONS"},
+	})
+	finalHandler = corsHeaders.Handler(finalHandler)
 	return finalHandler
 }
