@@ -78,7 +78,7 @@ func setupMiddlewares(handler http.Handler) http.Handler {
 	corsHeaders := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowCredentials: true,
-		AllowedMethods: []string{"GET", "HEAD", "POST", "DELETE", "PUT"},
+		AllowedMethods: []string{"GET", "HEAD", "POST", "DELETE", "PUT", "OPTIONS"},
 		OptionsPassthrough: false,
 	})
 	handler = corsHeaders.Handler(handler)
