@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"net/http"
 
+	"github.com/rs/cors"
+
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	"github.com/go-openapi/swag"
@@ -73,6 +75,13 @@ func configureTLS(tlsConfig *tls.Config) {
 // The middleware configuration is for the handler executors. These do not apply to the swagger.json document.
 // The middleware executes after routing but before authentication, binding and validation
 func setupMiddlewares(handler http.Handler) http.Handler {
+	corsHeaders := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowCredentials: true,
+		AllowedMethods: []string{"GET", "HEAD", "POST", "DELETE", "PUT"},
+		OptionsPassthrough: false,
+	})
+	handler = corsHeaders.Handler(handler)
 	return handler
 }
 
