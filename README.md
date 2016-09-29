@@ -55,8 +55,8 @@ can start the server as follows to enable HTTPS access:
 ```
 
 At this point the server is ready to accept both HTTP and HTTPS requests. If
-would like to resitrct access to **only** use TLS, add the `--scheme https`
-flag to the command line as follows:
+you would like to resitrct access to **only** use TLS, add the
+`--scheme https` flag to the command line as follows:
 
 ```
     $ _output/oshinko-rest-server --scheme https --tls-port 42443 --tls-key keyfile.key --tls-certificate certificatefile.cert
