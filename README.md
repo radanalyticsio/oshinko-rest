@@ -55,7 +55,7 @@ can start the server as follows to enable HTTPS access:
 ```
 
 At this point the server is ready to accept both HTTP and HTTPS requests. If
-you would like to resitrct access to **only** use TLS, add the
+you would like to restrict access to **only** use TLS, add the
 `--scheme https` flag to the command line as follows:
 
 ```
