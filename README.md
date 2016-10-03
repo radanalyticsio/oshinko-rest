@@ -28,7 +28,7 @@ After building the binary a basic test can be performed as follows:
 * start the server in a terminal
 
 ```
-    $ _output/oshinko-rest-server --port 42000
+    $ _output/oshinko-rest-server --port 42000 --scheme http
     2016/07/14 16:41:00 Serving oshinko rest at http://127.0.0.1:42000
 ```
 
@@ -41,6 +41,27 @@ After building the binary a basic test can be performed as follows:
 
 *The return value may be different depending on the version of the
 server you have built*
+
+### TLS
+
+To start the server with TLS enabled, you will need to supply a certificate
+file and a key file for the server to use. Once these files are created you
+can start the server as follows to enable HTTPS access:
+
+```
+    $ _output/oshinko-rest-server --port 42000 --tls-port 42443 --tls-key keyfile.key --tls-certificate certificatefile.cert
+    2016/09/28 12:10:47 Serving oshinko rest at http://127.0.0.1:42000
+    2016/09/28 12:10:47 Serving oshinko rest at https://127.0.0.1:42443
+```
+
+At this point the server is ready to accept both HTTP and HTTPS requests. If
+you would like to restrict access to **only** use TLS, add the
+`--scheme https` flag to the command line as follows:
+
+```
+    $ _output/oshinko-rest-server --scheme https --tls-port 42443 --tls-key keyfile.key --tls-certificate certificatefile.cert
+    2016/09/28 12:10:47 Serving oshinko rest at https://127.0.0.1:42443
+```
 
 ## Further reading
 
