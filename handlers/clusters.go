@@ -16,6 +16,7 @@ import (
 	opt "github.com/radanalyticsio/oshinko-rest/helpers/podtemplates"
 	"github.com/radanalyticsio/oshinko-rest/helpers/probes"
 	osv "github.com/radanalyticsio/oshinko-rest/helpers/services"
+	"github.com/radanalyticsio/oshinko-rest/helpers/clusterconfigs"
 	"github.com/radanalyticsio/oshinko-rest/models"
 	"github.com/radanalyticsio/oshinko-rest/restapi/operations/clusters"
 	kapi "k8s.io/kubernetes/pkg/api"
@@ -26,6 +27,7 @@ import (
 
 const nameSpaceMsg = "Cannot determine target openshift namespace"
 const clientMsg = "Unable to create an openshift client"
+const clusterConfigMsg = "Cluster configuration error"
 
 const typeLabel = "oshinko-type"
 const clusterLabel = "oshinko-cluster"
@@ -134,7 +136,7 @@ func toint64ptr(val int64) *int64 {
 
 func singleClusterResponse(clustername string,
 	pc kclient.PodInterface,
-	sc kclient.ServiceInterface) (*models.SingleCluster, error) {
+	sc kclient.ServiceInterface, config *models.NewClusterConfig) (*models.SingleCluster, error) {
 
 	addpod := func(p kapi.Pod) *models.ClusterModelPodsItems0 {
 		pod := new(models.ClusterModelPodsItems0)
@@ -165,6 +167,7 @@ func singleClusterResponse(clustername string,
 	}
 
 	cluster.Cluster.Pods = []*models.ClusterModelPodsItems0{}
+	cluster.Cluster.Config = &models.NewClusterConfig{}
 
 	// Report the master pod
 	selectorlist := makeSelector(masterType, clustername)
@@ -172,21 +175,31 @@ func singleClusterResponse(clustername string,
 	if err != nil {
 		return nil, err
 	}
-	cluster.Cluster.MasterCount = toint64ptr(int64(len(pods.Items)))
+	masterpods := int64(len(pods.Items))
 	for i := range pods.Items {
 		cluster.Cluster.Pods = append(cluster.Cluster.Pods, addpod(pods.Items[i]))
 	}
 
 	// Report the worker pods
-	cnt, workers, err := countWorkers(pc, clustername)
+	workerpods, workers, err := countWorkers(pc, clustername)
 	if err != nil {
 		return nil, err
 	}
-	cluster.Cluster.WorkerCount = toint64ptr(cnt)
 	for i := range workers.Items {
 		cluster.Cluster.Pods = append(cluster.Cluster.Pods, addpod(workers.Items[i]))
 	}
 
+	// If we have a config object, report the config counts in the result
+	// This is important in the create case, where the caller may need to know
+	// how many active workers to watch for.
+	// We may need to separate the concept of "configured" count and actual count
+        if config != nil {
+            cluster.Cluster.Config.WorkerCount = (*config).WorkerCount
+            cluster.Cluster.Config.MasterCount = (*config).MasterCount
+        } else {
+		cluster.Cluster.Config.WorkerCount = workerpods
+		cluster.Cluster.Config.MasterCount = masterpods
+	}
 	return cluster, nil
 }
 
@@ -298,7 +311,6 @@ func CreateClusterResponse(params clusters.CreateClusterParams) middleware.Respo
 		}
 		return 500
 	}
-
 	const mDepConfigMsg = "Unable to create master deployment configuration"
 	const wDepConfigMsg = "Unable to create worker deployment configuration"
 	const masterSrvMsg = "Unable to create spark master service endpoint"
@@ -309,7 +321,13 @@ func CreateClusterResponse(params clusters.CreateClusterParams) middleware.Respo
 	// pre spark 2, the name the master calls itself must match
 	// the name the workers use and the service name created
 	masterhost := *params.Cluster.Name
-	workercount := int(*params.Cluster.WorkerCount)
+
+	// Copy any named config referenced and update it with any explicit config values
+	finalconfig, err := clusterconfigs.GetClusterConfig(params.Cluster.Config)
+	if err != nil {
+		return reterr(fail(err, clusterConfigMsg, 409))
+	}
+	workercount := int(finalconfig.WorkerCount)
 
 	namespace, err := info.GetNamespace()
 	if namespace == "" || err != nil {
@@ -376,7 +394,7 @@ func CreateClusterResponse(params clusters.CreateClusterParams) middleware.Respo
 	// TODO ties into cluster status, make a note if the service is missing
 	sc.Create(&websv.Service)
 
-	cluster, err := singleClusterResponse(clustername, client.Pods(namespace), sc)
+	cluster, err := singleClusterResponse(clustername, client.Pods(namespace), sc, &finalconfig)
 	if err != nil {
 		return reterr(responseFailure(err, respMsg, 500))
 	}
@@ -617,7 +635,7 @@ func FindSingleClusterResponse(params clusters.FindSingleClusterParams) middlewa
 	pc := client.Pods(namespace)
 	sc := client.Services(namespace)
 
-	cluster, err := singleClusterResponse(clustername, pc, sc)
+	cluster, err := singleClusterResponse(clustername, pc, sc, nil)
 	if err != nil {
 		// In this case, the entire purpose of this call is to create this
 		// response object (as opposed to create and update which might fail
@@ -653,8 +671,14 @@ func UpdateSingleClusterResponse(params clusters.UpdateSingleClusterParams) midd
 	const respMsg = "Updated cluster but failed to construct a response object"
 
 	clustername := params.Name
-	workercount := int(*params.Cluster.WorkerCount)
-	mastercount := int(*params.Cluster.MasterCount)
+
+	// Copy any named config referenced and update it with any explicit config values
+	finalconfig, err := clusterconfigs.GetClusterConfig(params.Cluster.Config)
+	if err != nil {
+		return reterr(fail(err, clusterConfigMsg, 409))
+	}
+	workercount := int(finalconfig.WorkerCount)
+	mastercount := int(finalconfig.MasterCount)
 
 	// Simple things first. At this time we do not support cluster name change and
 	// we do not suppport scaling the master count (likely need HA setup for that to make sense)
@@ -703,7 +727,7 @@ func UpdateSingleClusterResponse(params clusters.UpdateSingleClusterParams) midd
 		}
 	}
 
-	cluster, err := singleClusterResponse(clustername, client.Pods(namespace), client.Services(namespace))
+	cluster, err := singleClusterResponse(clustername, client.Pods(namespace), client.Services(namespace), nil)
 	if err != nil {
 		return reterr(responseFailure(err, respMsg, 500))
 	}
