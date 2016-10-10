@@ -38,3 +38,22 @@ func (s *OshinkoUnitTestSuite) TestGetLogFile(c *check.C) {
 	observedFile = parser.FindOptionByShortName('l').Value().(string)
 	c.Assert(observedFile, check.Equals, expectedFile)
 }
+
+func (s *OshinkoUnitTestSuite) TestDebugEnabled(c *check.C) {
+	expectedState := false
+	observedState := flags.DebugEnabled()
+	c.Assert(observedState, check.Equals, expectedState)
+
+	expectedState = true
+	args := []string{"--debug"}
+	parser := getConfiguredParser()
+	parser.ParseArgs(args)
+	observedState = parser.FindOptionByLongName("debug").Value().(bool)
+	c.Assert(observedState, check.Equals, expectedState)
+
+	args = []string{"-d"}
+	parser = getConfiguredParser()
+	parser.ParseArgs(args)
+	observedState = parser.FindOptionByShortName('d').Value().(bool)
+	c.Assert(observedState, check.Equals, expectedState)
+}

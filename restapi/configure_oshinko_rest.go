@@ -48,6 +48,9 @@ func configureAPI(api *operations.OshinkoRestAPI) http.Handler {
 		}
 	}
 
+	// Print something if we are in debug mode
+	logging.Debug("Debug mode enabled")
+
 	api.Logger = logging.GetLogger().Printf
 
 	return setupGlobalMiddleware(api.Serve(setupMiddlewares))
