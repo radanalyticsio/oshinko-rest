@@ -10,7 +10,7 @@ install:
 	tools/build.sh install
 
 test:
-	tools/test.sh all
+	tools/oshinko-test.sh -t unit
 
 validate-api:
 	swagger validate api/swagger.yaml
