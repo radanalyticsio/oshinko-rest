@@ -27,7 +27,10 @@ import (
 
 const nameSpaceMsg = "Cannot determine target openshift namespace"
 const clientMsg = "Unable to create an openshift client"
+const lookupMsg = "Error while looking up cluster"
 const clusterConfigMsg = "Cluster configuration error"
+const replMsgMaster = "Cannot find replication controller for spark master"
+const replMsgWorker = "Cannot find replication controller for spark workers"
 
 const typeLabel = "oshinko-type"
 const clusterLabel = "oshinko-cluster"
@@ -612,7 +615,7 @@ func FindSingleClusterResponse(params clusters.FindSingleClusterParams) middlewa
 	// we use to create a cluster
 	ok, err := checkForDeploymentConfigs(nil, clustername, namespace)
 	if err != nil {
-		return reterr(fail(err, clientMsg, 500))
+		return reterr(fail(err, lookupMsg, 500))
 	}
 	if !ok {
 		return reterr(fail(nil, "No such cluster", 404))
@@ -627,7 +630,13 @@ func FindSingleClusterResponse(params clusters.FindSingleClusterParams) middlewa
 
 	rcc := client.ReplicationControllers(namespace)
 	mrepl, err := getReplController(rcc, clustername, masterType)
+	if err != nil || mrepl == nil {
+		return reterr(fail(err, replMsgMaster, 500))
+	}
 	wrepl, err := getReplController(rcc, clustername, workerType)
+	if err != nil || wrepl == nil {
+		return reterr(fail(err, replMsgWorker, 500))
+	}
 	config := models.NewClusterConfig{MasterCount: int64(mrepl.Spec.Replicas), WorkerCount: int64(wrepl.Spec.Replicas)}
 	cluster, err := singleClusterResponse(clustername, pc, sc, &config)
 	if err != nil {
@@ -684,6 +693,22 @@ func UpdateSingleClusterResponse(params clusters.UpdateSingleClusterParams) midd
 
 	clustername := params.Name
 
+	// Before we do further checks, make sure that we have deploymentconfigs
+	// If either the master or the worker deploymentconfig are missing, we
+	// assume that the cluster is missing. These are the base objects that
+	// we use to create a cluster
+	namespace, err := info.GetNamespace()
+	if namespace == "" || err != nil {
+		return reterr(fail(err, nameSpaceMsg, 500))
+	}
+	ok, err := checkForDeploymentConfigs(nil, clustername, namespace)
+	if err != nil {
+		return reterr(fail(err, lookupMsg, 500))
+	}
+	if !ok {
+		return reterr(fail(nil, "No such cluster", 404))
+	}
+
 	// Copy any named config referenced and update it with any explicit config values
 	finalconfig, err := clusterconfigs.GetClusterConfig(params.Cluster.Config)
 	if err != nil {
@@ -702,19 +727,14 @@ func UpdateSingleClusterResponse(params clusters.UpdateSingleClusterParams) midd
 		return reterr(fail(nil, masterMsg, 409))
 	}
 
-	namespace, err := info.GetNamespace()
-	if namespace == "" || err != nil {
-		return reterr(fail(err, nameSpaceMsg, 500))
-	}
-
 	client, err := osa.GetKubeClient()
 	if err != nil {
 		return reterr(fail(err, clientMsg, 500))
 	}
 	rcc := client.ReplicationControllers(namespace)
         repl, err := getReplController(rcc, clustername, workerType)
-	if err != nil {
-		return reterr(fail(err, findReplMsg, 500))
+	if err != nil || repl == nil {
+		return reterr(fail(err, replMsgWorker, 500))
 	}
 
 	// If the current replica count does not match the request, update the replication controller
@@ -725,7 +745,6 @@ func UpdateSingleClusterResponse(params clusters.UpdateSingleClusterParams) midd
 			return reterr(fail(err, updateReplMsg, 500))
 		}
 	}
-
 	cluster, err := singleClusterResponse(clustername, client.Pods(namespace), client.Services(namespace), &finalconfig)
 	if err != nil {
 		return reterr(responseFailure(err, respMsg, 500))
