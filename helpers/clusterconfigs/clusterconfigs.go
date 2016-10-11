@@ -9,7 +9,7 @@ import (
 	"github.com/radanalyticsio/oshinko-rest/models"
 )
 
-var defaultConfig models.NewClusterConfig = models.NewClusterConfig{1, "default", 1}
+var defaultConfig models.NewClusterConfig = models.NewClusterConfig{1, "", 1}
 
 const defaultname = "default"
 const configpath = "/etc/oshinko-cluster-configs/"

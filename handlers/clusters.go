@@ -175,13 +175,12 @@ func singleClusterResponse(clustername string,
 	if err != nil {
 		return nil, err
 	}
-	masterpods := int64(len(pods.Items))
 	for i := range pods.Items {
 		cluster.Cluster.Pods = append(cluster.Cluster.Pods, addpod(pods.Items[i]))
 	}
 
 	// Report the worker pods
-	workerpods, workers, err := countWorkers(pc, clustername)
+	_, workers, err := countWorkers(pc, clustername)
 	if err != nil {
 		return nil, err
 	}
@@ -189,17 +188,8 @@ func singleClusterResponse(clustername string,
 		cluster.Cluster.Pods = append(cluster.Cluster.Pods, addpod(workers.Items[i]))
 	}
 
-	// If we have a config object, report the config counts in the result
-	// This is important in the create case, where the caller may need to know
-	// how many active workers to watch for.
-	// We may need to separate the concept of "configured" count and actual count
-        if config != nil {
-            cluster.Cluster.Config.WorkerCount = (*config).WorkerCount
-            cluster.Cluster.Config.MasterCount = (*config).MasterCount
-        } else {
-		cluster.Cluster.Config.WorkerCount = workerpods
-		cluster.Cluster.Config.MasterCount = masterpods
-	}
+        cluster.Cluster.Config.WorkerCount = (*config).WorkerCount
+        cluster.Cluster.Config.MasterCount = (*config).MasterCount
 	return cluster, nil
 }
 
@@ -635,7 +625,11 @@ func FindSingleClusterResponse(params clusters.FindSingleClusterParams) middlewa
 	pc := client.Pods(namespace)
 	sc := client.Services(namespace)
 
-	cluster, err := singleClusterResponse(clustername, pc, sc, nil)
+	rcc := client.ReplicationControllers(namespace)
+	mrepl, err := getReplController(rcc, clustername, masterType)
+	wrepl, err := getReplController(rcc, clustername, workerType)
+	config := models.NewClusterConfig{MasterCount: int64(mrepl.Spec.Replicas), WorkerCount: int64(wrepl.Spec.Replicas)}
+	cluster, err := singleClusterResponse(clustername, pc, sc, &config)
 	if err != nil {
 		// In this case, the entire purpose of this call is to create this
 		// response object (as opposed to create and update which might fail
@@ -649,6 +643,24 @@ func FindSingleClusterResponse(params clusters.FindSingleClusterParams) middlewa
 	}
 
 	return clusters.NewFindSingleClusterOK().WithPayload(cluster)
+}
+
+func getReplController(client kclient.ReplicationControllerInterface, clustername, otype string) (*kapi.ReplicationController, error) {
+
+	selectorlist := makeSelector(otype, clustername)
+	repls, err := client.List(selectorlist)
+	if err != nil || len(repls.Items) == 0 {
+		return nil, err
+	}
+	// Use the latest replication controller.  There could be more than one
+	// if the user did something like oc env to set a new env var on a deployment
+	newestRepl := repls.Items[0]
+	for i := 0; i < len(repls.Items); i++ {
+		if repls.Items[i].CreationTimestamp.Unix() > newestRepl.CreationTimestamp.Unix() {
+			newestRepl = repls.Items[i]
+		}
+	}
+	return &newestRepl, err
 }
 
 // UpdateSingleClusterResponse update a cluster and return the new representation
@@ -700,34 +712,21 @@ func UpdateSingleClusterResponse(params clusters.UpdateSingleClusterParams) midd
 		return reterr(fail(err, clientMsg, 500))
 	}
 	rcc := client.ReplicationControllers(namespace)
-
-	// Get the replication controller for the cluster (there should only be 1)
-	// (it's unlikely we would get more than 1 since it is created by the deploymentconfig)
-	selectorlist := makeSelector(workerType, clustername)
-	repls, err := rcc.List(selectorlist)
-	if err != nil || len(repls.Items) == 0 {
+        repl, err := getReplController(rcc, clustername, workerType)
+	if err != nil {
 		return reterr(fail(err, findReplMsg, 500))
 	}
-	// Use the latest replication controller.  There could be more than one
-	// if the user did something like oc env to set a new env var on a deployment
-	newestRepl := repls.Items[0]
-	for i := 0; i < len(repls.Items); i++ {
-		if repls.Items[i].CreationTimestamp.Unix() > newestRepl.CreationTimestamp.Unix() {
-			newestRepl = repls.Items[i]
-		}
-	}
-	repl := newestRepl
 
 	// If the current replica count does not match the request, update the replication controller
 	if repl.Spec.Replicas != workercount {
 		repl.Spec.Replicas = workercount
-		_, err = rcc.Update(&repl)
+		_, err = rcc.Update(repl)
 		if err != nil {
 			return reterr(fail(err, updateReplMsg, 500))
 		}
 	}
 
-	cluster, err := singleClusterResponse(clustername, client.Pods(namespace), client.Services(namespace), nil)
+	cluster, err := singleClusterResponse(clustername, client.Pods(namespace), client.Services(namespace), &finalconfig)
 	if err != nil {
 		return reterr(responseFailure(err, respMsg, 500))
 	}
