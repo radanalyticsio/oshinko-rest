@@ -16,6 +16,7 @@ import (
 	"github.com/radanalyticsio/oshinko-rest/restapi/operations"
 	"github.com/radanalyticsio/oshinko-rest/restapi/operations/clusters"
 	"github.com/radanalyticsio/oshinko-rest/restapi/operations/server"
+	"github.com/radanalyticsio/oshinko-rest/version"
 )
 
 // This file is safe to edit. Once it exists it will not be overwritten
@@ -63,6 +64,8 @@ func configureAPI(api *operations.OshinkoRestAPI) http.Handler {
 	}
 
 	api.Logger = logging.GetLogger().Printf
+
+	logging.GetLogger().Println("Starting", version.GetAppName(), "version", version.GetVersion())
 
 	return setupGlobalMiddleware(api.Serve(setupMiddlewares))
 }
