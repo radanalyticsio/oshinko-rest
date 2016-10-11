@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/radanalyticsio/oshinko-rest/helpers/flags"
 	"github.com/radanalyticsio/oshinko-rest/helpers/uuid"
 )
 
@@ -59,12 +60,16 @@ func AddLoggingHandler(next http.Handler) http.Handler {
 		r.Body = br
 		next.ServeHTTP(lr, r)
 
-		reqstr := fmt.Sprintf("%s", br.Body)
-		Debug(reqId, "Request: ", reqstr)
+		if flags.DebugEnabled() {
+			reqstr := fmt.Sprintf("%s", br.Body)
+			Debug(reqId, "Request: ", reqstr)
+		}
 
 		l.Println(reqId, lr.status)
 
-		resstr := fmt.Sprintf("%s", *lr.response)
-		Debug(reqId, "Response: ", resstr)
+		if flags.DebugEnabled() {
+			resstr := fmt.Sprintf("%s", *lr.response)
+			Debug(reqId, "Response: ", resstr)
+		}
 	})
 }
