@@ -4,18 +4,45 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"github.com/radanalyticsio/oshinko-rest/models"
 )
 
+
 var defaultConfig models.NewClusterConfig = models.NewClusterConfig{1, "", 1}
+var configpath, globpath string
 
 const defaultname = "default"
-const configpath = "/etc/oshinko-cluster-configs/"
-const globpath = configpath + "%s\\.*"
 const failOnMissing = true
 const allowMissing = false
+const DefaultConfigPath = "/etc/oshinko-cluster-configs/"
+
+const MasterCountMustBeOne = "Cluster configuration must have a masterCount of 1"
+const WorkerCountMustBeAtLeastOne = "Cluster configuration may not have a workerCount less than 1"
+const NamedConfigDoesNotExist = "Named config '%s' does not exist"
+const ErrorWhileProcessing = "Error while processing %s: %s"
+
+func init() {
+	SetConfigPath(DefaultConfigPath)
+}
+
+// This function is meant to supoprt testability
+func SetConfigPath(dir string) {
+	configpath = dir
+	globpath = path.Join(configpath, "%s\\.*")
+}
+
+// This function is meant to support testability
+func GetConfigPath() string {
+	return configpath
+}
+
+// This function is meant to support testability
+func GetDefaultConfig() models.NewClusterConfig {
+	return defaultConfig
+}
 
 func assignConfig(res *models.NewClusterConfig, src models.NewClusterConfig) {
 	if src.MasterCount != 0 {
@@ -28,10 +55,10 @@ func assignConfig(res *models.NewClusterConfig, src models.NewClusterConfig) {
 
 func checkConfiguration(config models.NewClusterConfig) error {
 	var err error
-	if config.MasterCount == 0 {
-		err = errors.New("Cluster configuration may not have masterCount of 0")
-	} else if config.WorkerCount == 0 {
-		err = errors.New("Cluster configuration may not have workerCount of 0")
+	if config.MasterCount != 1 {
+		err = errors.New(MasterCountMustBeOne)
+	} else if config.WorkerCount < 1 {
+		err = errors.New(WorkerCountMustBeAtLeastOne)
 	}
 	return err
 }
@@ -41,6 +68,9 @@ func getInt(filename string) (res int64, err error) {
 	if err == nil {
 		_, err = fmt.Fscanf(fd, "%d", &res)
 		fd.Close()
+		if err != nil {
+			err = errors.New(fmt.Sprintf(ErrorWhileProcessing, filename, err.Error()))
+		}
 	}
 	return res, err
 }
@@ -67,10 +97,9 @@ func readConfig(name string, res *models.NewClusterConfig, failOnMissing bool) (
 	filelist, err := filepath.Glob(fmt.Sprintf(globpath, name))
 	if err == nil {
 		if failOnMissing == true && len(filelist) == 0 {
-			return errors.New(fmt.Sprintf("Named config '%s' does not exist", name))
+			return errors.New(fmt.Sprintf(NamedConfigDoesNotExist, name))
 		}
 		for _, v := range (filelist) {
-
 			// Break up each filename into elements by "."
 			// The first element of every filename will be the config name, dump it
 			elements := strings.Split(filepath.Base(v), ".")[1:]
