@@ -1,9 +1,51 @@
-# oshinko-rest
+# oshinko application
 
-REST based API server for an Apache Spark on OpenShift cluster management
-application.
+The oshinko application manages Apache Spark clusters on OpenShift.
+The application consists of a REST server (oshinko-rest) and a web UI
+and is designed to run in an OpenShift project.
 
-## Building oshinko-rest
+This repository contains tools to launch the oshinko application
+along with the source code for the oshinko REST server. The source
+code for the web UI is located in a different repository.
+
+# Launching the oshinko application with public images
+
+This section describes how to simply launch the oshinko components
+in an OpenShift project using public images and defaults.
+
+## Create an oshinko service account
+
+The oshinko-rest image uses a service account to perform OpenShift
+operations. This service account must be created and given the admin role in
+*each* project which will use oshinko, for example:
+
+Create a new project *myproject*:
+
+    $ oc new-project myproject
+
+Create the oshinko service account:
+
+    $ oc create sa oshinko -n myproject
+
+Assign the admin role:
+
+    $ oc policy add-role-to-user admin system:serviceaccount:myproject:oshinko -n myproject
+
+## Process the server-ui-template.yaml
+
+This template deploys the oshinko application in an OpenShift project.
+By default it uses several images available from radanalyticsio on the
+docker hub (https://hub.docker.com/u/radanalyticsio/)
+
+To deploy oshinko from the command line:
+ 
+    $ oc process -f tools/server-ui-template.yaml | oc create -f -
+
+To load the template for use from the console with "Add to project":
+
+    $ oc create -f tools/server-ui-template.yaml
+
+# Building and running oshinko-rest
 
 To build the project simply run the `build` or `install` target in the
 makefile.
@@ -63,7 +105,7 @@ you would like to restrict access to **only** use TLS, add the
     2016/09/28 12:10:47 Serving oshinko rest at https://127.0.0.1:42443
 ```
 
-## Further reading
+# Further reading
 
-Please see the HACKING and CONTRIBUTING docs for more information about
-working with this codebase.
+Please see the CONTRIBUTION and HACKING docs for more information about
+working with this codebase and the docs directory for more general information on usage.
