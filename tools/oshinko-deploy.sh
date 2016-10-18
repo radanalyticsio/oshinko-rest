@@ -28,7 +28,6 @@ DEFAULT_OSHINKO_WEB_IMAGE=radanalyticsio/oshinko-webui
 DEFAULT_SPARK_IMAGE=radanalyticsio/openshift-spark
 DEFAULT_OPENSHIFT_USER=developer
 DEFAULT_OPENSHIFT_PROJECT=myproject
-DEFAULT_WEBROUTE="oshinko.127.0.0.1.xip.io"
 
 while getopts :dc:u:p:s:w:r:o:h opt; do
     case $opt in
@@ -109,17 +108,21 @@ then
     REST_IMAGE=$DEFAULT_OSHINKO_REST_IMAGE
 fi
 
-if [ -z "$WEBROUTE" ]
+if [ -n "$OS_ALLINONE" ]
 then
-    WEBROUTE=$DEFAULT_WEBROUTE
-fi
-
-if $OS_ALLINONE
-then
-    oc cluster up
+    if [ -n "$OS_CLUSTER" ]
+    then
+        echo "You have requested an all-in-one deployment AND specified a cluster address."
+        echo "Please choose one of these options and restart."
+        exit 1
+    else
+        oc cluster up
+    fi
 fi
 
 oc login $OS_CLUSTER -u $OS_USER
+
+oc new-project $PROJECT
 
 oc create sa oshinko -n $PROJECT
 oc policy add-role-to-user admin system:serviceaccount:$PROJECT:oshinko -n $PROJECT
@@ -128,8 +131,16 @@ curl -s \
     https://raw.githubusercontent.com/radanalyticsio/oshinko-rest/master/tools/server-ui-template.yaml \
   | oc create -n $PROJECT -f -
 
+if [ -z "$WEBROUTE" ]
+then
 oc new-app --template oshinko \
            -p OSHINKO_SERVER_IMAGE=$REST_IMAGE \
            -p OSHINKO_CLUSTER_IMAGE=$SPARK_IMAGE \
            -p OSHINKO_WEB_IMAGE=$WEB_IMAGE \
            -p OSHINKO_WEB_ROUTE_HOSTNAME=$WEBROUTE
+else
+oc new-app --template oshinko \
+           -p OSHINKO_SERVER_IMAGE=$REST_IMAGE \
+           -p OSHINKO_CLUSTER_IMAGE=$SPARK_IMAGE \
+           -p OSHINKO_WEB_IMAGE=$WEB_IMAGE
+fi

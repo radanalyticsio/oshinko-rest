@@ -110,7 +110,7 @@ information see the script help text.
 This will start an OpenShift all-in-one cluster with the `oc cluster up`
 command on the host, then it will deploy the oshinko suite into the
 `myproject` project as user `developer`. It will apply the default route
-url from the deploy script to the oshinko web console.
+url specified by OpenShift.
 
 **Example deployment on remote cluster**
 
