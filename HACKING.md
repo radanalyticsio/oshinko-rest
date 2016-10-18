@@ -121,7 +121,7 @@ option. To customize this behavior, the environment variables
 `OSHINKO_SERVER_HOST` and `OSHINKO_SERVER_PORT` can be specified to the
 `docker run` command to specify an address and port, respectively.
 
-## Running oshino-rest outside of OpenShift
+## Running oshinko-rest outside of OpenShift
 
 It's possible to run oshinko-rest locally; this can be a
 big help during development and debugging.
