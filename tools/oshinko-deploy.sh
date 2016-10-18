@@ -39,6 +39,7 @@ while getopts :dc:u:p:s:w:r:o:h opt; do
             ;;
         u)
             OS_USER=$OPTARG
+            USER_REQUESTED=true
             ;;
         p)
             PROJECT=$OPTARG
@@ -116,7 +117,7 @@ then
         echo "Please choose one of these options and restart."
         exit 1
     fi
-    if [ -n "$OS_USER" ]
+    if [ -n "$USER_REQUESTED" ]
     then
         echo "Error: You have requested an all-in-one deployment AND specified an OpenShift user."
         echo "Please choose either all-in-one or a cluster deployment if you need to use a specific user."
