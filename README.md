@@ -16,6 +16,12 @@ Assuming a successful build, the output will be stored in the `_output`
 directory. For an `install` target, the binary will be placed in your
 `$GOPATH/bin`.
 
+## Deploying oshinko
+
+For the most complete usage of oshinko-rest, we recommend installing the
+entire oshinko suite. For more information see the `README.md` file in the
+`tools` directory.
+
 ## Running oshinko-rest
 
 For most functionality an OpenShift cluster will be needed, but the
