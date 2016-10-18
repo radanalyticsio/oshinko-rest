@@ -8,7 +8,7 @@
 #
 # example usage:
 #
-#    $ oshinko-deploy.sh -c 10.0.1.100 -w oshinko.10.0.1.100.xip.io
+#    $ oshinko-deploy.sh -c 10.0.1.100 -o oshinko.10.0.1.100.xip.io
 #
 # this will deploy oshinko into the OpenShift cluster running at 10.0.1.100
 # and set the oshinko webui route url to oshinko.10.0.1.100.xip.io.
