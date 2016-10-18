@@ -107,5 +107,5 @@ you would like to restrict access to **only** use TLS, add the
 
 # Further reading
 
-Please see the CONTRIBUTION and HACKING docs for more information about
+Please see the CONTRIBUTING and HACKING docs for more information about
 working with this codebase and the docs directory for more general information on usage.
