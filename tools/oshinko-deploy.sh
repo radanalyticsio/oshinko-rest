@@ -112,12 +112,17 @@ if [ -n "$OS_ALLINONE" ]
 then
     if [ -n "$OS_CLUSTER" ]
     then
-        echo "You have requested an all-in-one deployment AND specified a cluster address."
+        echo "Error: You have requested an all-in-one deployment AND specified a cluster address."
         echo "Please choose one of these options and restart."
         exit 1
-    else
-        oc cluster up
     fi
+    if [ -n "$OS_USER" ]
+    then
+        echo "Error: You have requested an all-in-one deployment AND specified an OpenShift user."
+        echo "Please choose either all-in-one or a cluster deployment if you need to use a specific user."
+        exit 1
+    fi
+    oc cluster up
 fi
 
 oc login $OS_CLUSTER -u $OS_USER
@@ -134,12 +139,14 @@ curl -s \
 if [ -n "$WEBROUTE" ]
 then
 oc new-app --template oshinko \
+           -n $PROJECT \
            -p OSHINKO_SERVER_IMAGE=$REST_IMAGE \
            -p OSHINKO_CLUSTER_IMAGE=$SPARK_IMAGE \
            -p OSHINKO_WEB_IMAGE=$WEB_IMAGE \
            -p OSHINKO_WEB_ROUTE_HOSTNAME=$WEBROUTE
 else
 oc new-app --template oshinko \
+           -n $PROJECT \
            -p OSHINKO_SERVER_IMAGE=$REST_IMAGE \
            -p OSHINKO_CLUSTER_IMAGE=$SPARK_IMAGE \
            -p OSHINKO_WEB_IMAGE=$WEB_IMAGE
