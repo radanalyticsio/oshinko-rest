@@ -131,7 +131,7 @@ curl -s \
     https://raw.githubusercontent.com/radanalyticsio/oshinko-rest/master/tools/server-ui-template.yaml \
   | oc create -n $PROJECT -f -
 
-if [ -z "$WEBROUTE" ]
+if [ -n "$WEBROUTE" ]
 then
 oc new-app --template oshinko \
            -p OSHINKO_SERVER_IMAGE=$REST_IMAGE \
