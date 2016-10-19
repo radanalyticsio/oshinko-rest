@@ -11,6 +11,7 @@ produces:
   - application/json
 schemes:
   - https
+  - http
 definitions:
   ClusterModel:
     allOf:

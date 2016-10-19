@@ -74,7 +74,7 @@ oshinko templates. If no name is given, the `default` configuration
 will be used.
 
 The name of a configuration may also be passed in the json object
-used to create or update a cluster through the REST endpoint,
+used to create or update a cluster through the oshinko-rest endpoint,
 for example:
 
-    $ curl -H "Content-Type: application/json" -X POST -d '{"name": "sam", "config": {"name": "small"}}' localhost:8443/clusters
+    $ curl -H "Content-Type: application/json" -X POST -d '{"name": "sam", "config": {"name": "small"}}' http://oshinko-rest-host:8081/clusters

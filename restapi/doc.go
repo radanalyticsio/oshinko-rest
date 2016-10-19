@@ -4,6 +4,7 @@ The REST API server for the Oshinko suite of applications
 
 
     Schemes:
+      http
       https
     Host: localhost
     BasePath: /
