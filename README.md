@@ -20,7 +20,7 @@ to deploy the oshinko application into the current project:
     $ ./tools/oshinko-deploy.sh -u $(oc whoami) -p $(oc project --short)
 
 For more information on what you can do with the `oshinko-deploy.sh` script,
-see the `tools/README.md` file.
+see the HACKING doc.
 
 # Building and running the oshinko-rest binary
 

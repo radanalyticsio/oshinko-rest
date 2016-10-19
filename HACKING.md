@@ -20,6 +20,41 @@ Example using images which have been pushed to the integrated registry at
     $ oc process -f tools/server-ui-template.yaml -v OSHINKO_SERVER_IMAGE=172.30.159.57:5000/myproject/oshinko-rest,OSHINKO_CLUSTER_IMAGE=172.30.159.57:5000/myproject/openshift-spark,OSHINKO_WEB_IMAGE=172.30.159.57:5000/myproject/oshinko-webui > server-template.json
     $ oc create -f server-template.json
 
+## Sample script to deploy the oshinko application with existing images
+
+The `tools/oshinko-deploy.sh` script can deploy the oshinko suite into an existing
+OpenShift deployment or it can start an all-in-one docker OpenShift on the
+host. It will pull the latest upstream images from the radanalyticsio
+organization. It can also be configured to use alternate images, for more
+information see the script help text.
+
+**Example all-in-one deployment**
+
+    $ ./tools/oshinko-deploy.sh -d
+
+This will start an OpenShift all-in-one cluster with the `oc cluster up`
+command on the host, then it will deploy the oshinko suite into the
+`myproject` project as user `developer`. It will apply the default route
+url specified by OpenShift.
+
+**Example deployment on remote cluster**
+
+    $ ./tools/oshinko-deploy.sh -c https://10.0.1.100:8443 \
+                          -u bob \
+                          -p bobsproject \
+                          -o bobsoshinko.10.0.1.100.xip.io
+
+This will deploy oshinko into the OpenShift cluster on the 10.0.1.100 host,
+in the `bobsproject` project as user `bob`. It will apply the route url
+`bobsoshinko.10.0.1.100.xip.io` to the oshinko web console.
+
+### A note on permissions
+
+The all-in-one deployment requires that the user running the script has
+permission to issue docker commands. If docker is not configured to
+allow non-root access, you will need to invoke this script using `sudo`
+or as the `root` user for an all-in-one deployment.
+
 ## Sample script to deploy oshinko from sources in a local OpenShift instance
 
 Use `tools/oshinko-setup.sh` to quickly set up a development environment
@@ -52,34 +87,13 @@ It should be noted, that if you do not use a custom Spark image with
 the -s flag, a Spark image will be built for you from the openshift-spark
 repository.
 
-## Sample script to deploy oshinko from existing images
-
-The `tools/oshinko-deploy.sh` script can deploy the oshinko suite into an already
-running OpenShift instance. It requires that certain images exist in your
-local docker registry, namely; `oshinko-rest`, `oshinko-webui`,
-`openshift-pyspark`, and optionally `radanalytics-pyspark`.
-
-With these in place, the script will deploy and setup oshinko into a project
-of your choosing. This script also assumes that you can run docker commands
-without an escalation of privileges.
-
-Example usage:
-
-    $ ./oshinko-deploy.sh -w myweb.10.16.40.70.xip.io -s myregistry.com:5000/sparkimage -p myproject -u developer
-
-Running this will deploy oshinko into the project `myproject` using the
-`developer` user, it will expose the webui at
-`http://myweb.10.16.40.70.xio.io`, and oshinko will use the spark image from
-`myregistry.com:5000/sparkimage` as the base for deployment.
-
 ### A note on permissions
 
-Some of the operations in this script may require superuser privileges
-depending on the configuration of your system and OpenShift deployment. In
-specific, the usage of docker and the permissions for logging in as the
-`system:admin` user in OpenShift are assumed. If these are not configured for
-non-root access in your system, then you may need to invoke this script using
-the `sudo` command or as the `root` user.
+The script requires that the user running the script has
+permission to issue docker commands and log into OpenShift as the
+`system:admin` user. If your system is not configured to allow
+non-root users to do these things, you will need to invoke this script using `sudo`
+or as the `root` user.
 
 ## Sample scripts for interacting with oshinko-rest using curl
 
