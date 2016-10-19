@@ -24,11 +24,11 @@ looks something like this:
       name: oshinko-cluster-configs
 
 Named configurations are defined in the data section of the
-ConfigMap. Currently there is effectively only one parameter
-which may be set for a configuration: `workercount` (`mastercount`
-may also be set but is currently constrained to a value of "1").
-A parameter is set using the name of the configuration followed
-by a dot and the name of the parameter.
+ConfigMap. Currently `workercount` is the only parameter
+which may be set for a configuration (`mastercount` may actually
+be set but is constrained to a value of "1"). A parameter is set
+using the name of the configuration followed by a dot and the name
+of the parameter.
 
 To add a configuration called `large` with a `workercount` of
 ten, the ConfigMap would be modified to look like this:
@@ -64,8 +64,7 @@ the `small` configuration shown above inherits values from `default` and
 then modifies its own `workercount` to be three.
 
 Note, the `default` configuration itself can be modified in a project by
-editing `oshinko-cluster-configs` and adding a definition for `default`
-in the data section of the ConfigMap.
+editing `oshinko-cluster-configs` and adding a definition for `default`.
 
 ## Where configuration names may be used
 
