@@ -11,16 +11,21 @@ named `oshinko-cluster-configs` which is read by oshinko-rest.
 Any named cluster configuration defined in the ConfigMap
 can be used to create or scale a cluster.
 
-The default ConfigMap contains one named configuration as
-an example. The `small` configuration specifies a cluster
-that has three worker nodes. The yaml for the ConfigMap
-looks something like this:
+The default ConfigMap contains a single configuration named `small`.
+The `small` configuration specifies a cluster that has three worker nodes.
+To see what configurations are defined, use `oc export` in your project
+after launching oshinko:
 
-    kind: ConfigMap
+    $ oc export configmap oshinko-cluster-configs
+
     apiVersion: v1
     data:
       small.workercount: "3"
+    kind: ConfigMap
     metadata:
+      creationTimestamp: null
+      labels:
+        app: oshinko
       name: oshinko-cluster-configs
 
 Named configurations are defined in the data section of the
@@ -33,12 +38,15 @@ of the parameter.
 To add a configuration called `large` with a `workercount` of
 ten, the ConfigMap would be modified to look like this:
 
-    kind: ConfigMap
     apiVersion: v1
     data:
       small.workercount: "3"
       large.workercount: "10"
+    kind: ConfigMap
     metadata:
+      creationTimestamp: null
+      labels:
+        app: oshinko
       name: oshinko-cluster-configs
 
 ## Editing oshinko-cluster-configs
