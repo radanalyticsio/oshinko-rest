@@ -73,7 +73,7 @@ while getopts :dc:u:p:s:w:r:o:t:h opt; do
             echo "  -p PROJECT    OpenShift project name to install oshinko into (default: $DEFAULT_OPENSHIFT_USER)"
             echo "  -s IMAGE      spark docker image to use for clusters (default: $DEFAULT_SPARK_IMAGE)"
             echo "  -w IMAGE      oshinko-webui docker image to use for deployment (default: $DEFAULT_OSHINKO_WEB_IMAGE)"
-            echo "  -r IMAGE      oshinko-webui docker image to use for deployment (default: $DEFAULT_OSHINKO_WEB_IMAGE)"
+            echo "  -r IMAGE      oshinko-rest docker image to use for deployment (default: $DEFAULT_OSHINKO_REST_IMAGE)"
             echo "  -o HOSTNAME   hostname to use in exposed route to oshinko-web"
             echo "  -t TEMPLATE   an OpenShift template file to deploy oshinko (default: tools/server-ui-template.yaml curl'd from upstream)"
             echo
