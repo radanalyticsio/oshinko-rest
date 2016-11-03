@@ -61,7 +61,7 @@ while getopts :dc:u:p:s:w:r:o:t:ih opt; do
             ALT_TEMPLATE=$OPTARG
             ;;
         i)
-            S2I_TEMPLATES=true
+            S2I_TEMPLATES=false
             ;;
         h)
             echo "usage: oshinko-deploy.sh [options]"
