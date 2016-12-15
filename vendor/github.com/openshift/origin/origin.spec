@@ -5,7 +5,6 @@
 
 %global gopath      %{_datadir}/gocode
 %global import_path github.com/openshift/origin
-%global sdn_import_path github.com/openshift/openshift-sdn
 # The following should only be used for cleanup of sdn-ovs upgrades
 %global kube_plugin_path /usr/libexec/kubernetes/kubelet-plugins/net/exec/redhat~openshift-ovs-subnet
 
@@ -18,22 +17,28 @@
 # this is the version we obsolete up to. The packaging changed for Origin
 # 1.0.6 and OSE 3.1 such that 'openshift' package names were no longer used.
 %global package_refector_version 3.0.2.900
-# %commit and %ldflags are intended to be set by tito custom builders provided
+%global golang_version 1.6.2
+# %commit and %os_git_vars are intended to be set by tito custom builders provided
 # in the .tito/lib directory. The values in this spec file will not be kept up to date.
 %{!?commit:
 %global commit 86b5e46426ba828f49195af21c56f7c6674b48f7
 }
 %global shortcommit %(c=%{commit}; echo ${c:0:7})
-# ldflags from hack/common.sh os::build:ldflags
-%{!?ldflags:
-%global ldflags -X github.com/openshift/origin/pkg/version.majorFromGit 0 -X github.com/openshift/origin/pkg/version.minorFromGit 0+ -X github.com/openshift/origin/pkg/version.versionFromGit v0.0.1 -X github.com/openshift/origin/pkg/version.commitFromGit 86b5e46 -X k8s.io/kubernetes/pkg/version.gitCommit 6241a21 -X k8s.io/kubernetes/pkg/version.gitVersion v0.11.0-330-g6241a21
+# os_git_vars needed to run hack scripts during rpm builds
+%{!?os_git_vars:
+%global os_git_vars OS_GIT_VERSION='' OS_GIT_COMMIT='' OS_GIT_MAJOR='' OS_GIT_MINOR='' OS_GIT_TREE_STATE=''
 }
 
+%{!?make_redistributable:
 %if 0%{?fedora} || 0%{?epel}
 %global make_redistributable 0
 %else
 %global make_redistributable 1
 %endif
+}
+
+# by default build the test binaries for Origin
+%{!?build_tests: %global build_tests 1 }
 
 %if "%{dist}" == ".el7aos"
 %global package_name atomic-openshift
@@ -51,10 +56,20 @@ Release:        0%{?dist}
 Summary:        Open Source Container Management by Red Hat
 License:        ASL 2.0
 URL:            https://%{import_path}
-ExclusiveArch:  x86_64
+
+# If go_arches not defined fall through to implicit golang archs
+%if 0%{?go_arches:1}
+ExclusiveArch:  %{go_arches}
+%else
+ExclusiveArch:  x86_64 aarch64 ppc64le
+%endif
+
 Source0:        https://%{import_path}/archive/%{commit}/%{name}-%{version}.tar.gz
 BuildRequires:  systemd
-BuildRequires:  golang >= 1.4
+BuildRequires:  bsdtar
+BuildRequires:  golang >= %{golang_version}
+BuildRequires:  krb5-devel
+BuildRequires:  rsync
 Requires:       %{name}-clients = %{version}-%{release}
 Requires:       iptables
 Obsoletes:      openshift < %{package_refector_version}
@@ -87,12 +102,14 @@ Obsoletes:      openshift-master < %{package_refector_version}
 %description master
 %{summary}
 
+%if 0%{build_tests}
 %package tests
 Summary: %{product_name} Test Suite
 Requires:       %{name} = %{version}-%{release}
 
 %description tests
 %{summary}
+%endif
 
 %package node
 Summary:        %{product_name} Node
@@ -103,6 +120,7 @@ Requires:       util-linux
 Requires:       socat
 Requires:       nfs-utils
 Requires:       ethtool
+Requires:       device-mapper-persistent-data >= 0.6.2
 Requires(post):   systemd
 Requires(preun):  systemd
 Requires(postun): systemd
@@ -130,8 +148,6 @@ Requires:       git
 %if 0%{?make_redistributable}
 %package clients-redistributable
 Summary:        %{product_name} Client binaries for Linux, Mac OSX, and Windows
-BuildRequires:  golang-pkg-darwin-amd64
-BuildRequires:  golang-pkg-windows-386
 Obsoletes:      openshift-clients-redistributable < %{package_refector_version}
 
 %description clients-redistributable
@@ -164,71 +180,66 @@ Obsoletes:        openshift-sdn-ovs < %{package_refector_version}
 %description sdn-ovs
 %{summary}
 
+%package excluder
+Summary:   Exclude openshift packages from updates
+BuildArch: noarch
+
+%description excluder
+Many times admins do not want openshift updated when doing
+normal system updates.
+
+%{name}-excluder exclude - No openshift packages can be updated
+%{name}-excluder unexclude - Openshift packages can be updated
+
+%package docker-excluder
+Summary:   Exclude docker packages from updates
+BuildArch: noarch
+
+%description docker-excluder
+Certain versions of OpenShift will not work with newer versions
+of docker.  Exclude those versions of docker.
+
+%{name}-docker-excluder exclude - No major docker updates
+%{name}-docker-excluder unexclude - docker packages can be updated
+
 %prep
 %setup -q
 
 %build
+# Create Binaries
+%{os_git_vars} hack/build-cross.sh
 
-# Don't judge me for this ... it's so bad.
-mkdir _build
-
-# Horrid hack because golang loves to just bundle everything
-pushd _build
-    mkdir -p src/github.com/openshift
-    ln -s $(dirs +1 -l) src/%{import_path}
-popd
-
-
-# Gaming the GOPATH to include the third party bundled libs at build
-# time.
-mkdir _thirdpartyhacks
-pushd _thirdpartyhacks
-    ln -s \
-        $(dirs +1 -l)/Godeps/_workspace/src/ \
-            src
-popd
-export GOPATH=$(pwd)/_build:$(pwd)/_thirdpartyhacks:%{buildroot}%{gopath}:%{gopath}
-# Build all linux components we care about
-for cmd in oc openshift dockerregistry
-do
-        go install -ldflags "%{ldflags}" %{import_path}/cmd/${cmd}
-done
-go test -c -o _build/bin/extended.test -ldflags "%{ldflags}" %{import_path}/test/extended
-
-%if 0%{?make_redistributable}
-# Build clients for other platforms
-GOOS=windows GOARCH=386 go install -ldflags "%{ldflags}" %{import_path}/cmd/oc
-GOOS=darwin GOARCH=amd64 go install -ldflags "%{ldflags}" %{import_path}/cmd/oc
+%if 0%{build_tests}
+# Create extended.test
+%{os_git_vars} hack/build-go.sh test/extended/extended.test
 %endif
-
-#Build our pod
-pushd images/pod/
-    go build -ldflags "%{ldflags}" pod.go
-popd
 
 %install
 
+PLATFORM="$(go env GOHOSTOS)/$(go env GOHOSTARCH)"
 install -d %{buildroot}%{_bindir}
 
 # Install linux components
 for bin in oc openshift dockerregistry
 do
   echo "+++ INSTALLING ${bin}"
-  install -p -m 755 _build/bin/${bin} %{buildroot}%{_bindir}/${bin}
+  install -p -m 755 _output/local/bin/${PLATFORM}/${bin} %{buildroot}%{_bindir}/${bin}
 done
 install -d %{buildroot}%{_libexecdir}/%{name}
-install -p -m 755 _build/bin/extended.test %{buildroot}%{_libexecdir}/%{name}/
+%if 0%{build_tests}
+install -p -m 755 _output/local/bin/${PLATFORM}/extended.test %{buildroot}%{_libexecdir}/%{name}/
+%endif
 
 %if 0%{?make_redistributable}
 # Install client executable for windows and mac
 install -d %{buildroot}%{_datadir}/%{name}/{linux,macosx,windows}
-install -p -m 755 _build/bin/oc %{buildroot}%{_datadir}/%{name}/linux/oc
-install -p -m 755 _build/bin/darwin_amd64/oc %{buildroot}/%{_datadir}/%{name}/macosx/oc
-install -p -m 755 _build/bin/windows_386/oc.exe %{buildroot}/%{_datadir}/%{name}/windows/oc.exe
+install -p -m 755 _output/local/bin/linux/amd64/oc %{buildroot}%{_datadir}/%{name}/linux/oc
+install -p -m 755 _output/local/bin/darwin/amd64/oc %{buildroot}/%{_datadir}/%{name}/macosx/oc
+install -p -m 755 _output/local/bin/windows/amd64/oc.exe %{buildroot}/%{_datadir}/%{name}/windows/oc.exe
 %endif
 
-#Install pod
-install -p -m 755 images/pod/pod %{buildroot}%{_bindir}/
+# Install pod
+install -p -m 755 _output/local/bin/${PLATFORM}/pod %{buildroot}%{_bindir}/
 
 install -d -m 0755 %{buildroot}%{_unitdir}
 
@@ -251,7 +262,7 @@ for cmd in \
     openshift-sti-build \
     origin
 do
-    ln -s %{_bindir}/openshift %{buildroot}%{_bindir}/$cmd
+    ln -s openshift %{buildroot}%{_bindir}/$cmd
 done
 
 ln -s oc %{buildroot}%{_bindir}/kubectl
@@ -267,9 +278,13 @@ install -m 0644 contrib/systemd/origin-node.sysconfig %{buildroot}%{_sysconfdir}
 install -d -m 0755 %{buildroot}%{_prefix}/lib/tuned/%{name}-node-{guest,host}
 install -m 0644 contrib/tuned/origin-node-guest/tuned.conf %{buildroot}%{_prefix}/lib/tuned/%{name}-node-guest/tuned.conf
 install -m 0644 contrib/tuned/origin-node-host/tuned.conf %{buildroot}%{_prefix}/lib/tuned/%{name}-node-host/tuned.conf
-install -d -m 0755 %{buildroot}%{_mandir}/man7
 
-# Patch the manpage for tuned profiles on aos
+# Install man1 man pages
+install -d -m 0755 %{buildroot}%{_mandir}/man1
+install -m 0644 docs/man/man1/* %{buildroot}%{_mandir}/man1/
+
+# Patch and install the manpage for tuned profiles on aos
+install -d -m 0755 %{buildroot}%{_mandir}/man7
 %if "%{dist}" == ".el7aos"
 %{__sed} -e 's|origin-node|atomic-openshift-node|g' \
  -e 's|ORIGIN_NODE|ATOMIC_OPENSHIFT_NODE|' \
@@ -282,20 +297,52 @@ mkdir -p %{buildroot}%{_sharedstatedir}/origin
 
 
 # Install sdn scripts
-install -d -m 0755 %{buildroot}%{_unitdir}/docker.service.d
-install -p -m 0644 contrib/systemd/docker-sdn-ovs.conf %{buildroot}%{_unitdir}/docker.service.d/
-pushd _thirdpartyhacks/src/%{sdn_import_path}/plugins/osdn/ovs/bin
-   install -p -m 755 openshift-sdn-ovs %{buildroot}%{_bindir}/openshift-sdn-ovs
-   install -p -m 755 openshift-sdn-docker-setup.sh %{buildroot}%{_bindir}/openshift-sdn-docker-setup.sh
+install -d -m 0755 %{buildroot}%{_sysconfdir}/cni/net.d
+pushd pkg/sdn/plugin/sdn-cni-plugin
+   install -p -m 0644 80-openshift-sdn.conf %{buildroot}%{_sysconfdir}/cni/net.d
 popd
+pushd pkg/sdn/plugin/bin
+   install -p -m 0755 openshift-sdn-ovs %{buildroot}%{_bindir}/openshift-sdn-ovs
+popd
+install -d -m 0755 %{buildroot}/opt/cni/bin
+install -p -m 0755 _output/local/bin/linux/amd64/sdn-cni-plugin %{buildroot}/opt/cni/bin/openshift-sdn
+install -p -m 0755 _output/local/bin/linux/amd64/host-local %{buildroot}/opt/cni/bin
+install -p -m 0755 _output/local/bin/linux/amd64/loopback %{buildroot}/opt/cni/bin
+
 install -d -m 0755 %{buildroot}%{_unitdir}/%{name}-node.service.d
 install -p -m 0644 contrib/systemd/openshift-sdn-ovs.conf %{buildroot}%{_unitdir}/%{name}-node.service.d/openshift-sdn-ovs.conf
 
 # Install bash completions
 install -d -m 755 %{buildroot}%{_sysconfdir}/bash_completion.d/
-install -p -m 644 contrib/completions/bash/* %{buildroot}%{_sysconfdir}/bash_completion.d/
-# Generate atomic-enterprise bash completions
-%{__sed} -e "s|openshift|atomic-enterprise|g" contrib/completions/bash/openshift > %{buildroot}%{_sysconfdir}/bash_completion.d/atomic-enterprise
+for bin in oadm oc openshift atomic-enterprise
+do
+  echo "+++ INSTALLING BASH COMPLETIONS FOR ${bin} "
+  %{buildroot}%{_bindir}/${bin} completion bash > %{buildroot}%{_sysconfdir}/bash_completion.d/${bin}
+  chmod 644 %{buildroot}%{_sysconfdir}/bash_completion.d/${bin}
+done
+
+# Install origin-accounting
+install -d -m 755 %{buildroot}%{_sysconfdir}/systemd/system.conf.d/
+install -p -m 644 contrib/systemd/origin-accounting.conf %{buildroot}%{_sysconfdir}/systemd/system.conf.d/
+
+# Excluder variables
+mkdir -p $RPM_BUILD_ROOT/usr/sbin
+%if 0%{?fedora}
+  OS_CONF_FILE="/etc/dnf.conf"
+%else
+  OS_CONF_FILE="/etc/yum.conf"
+%endif
+
+# Install openshift-excluder script
+sed "s|@@CONF_FILE-VARIABLE@@|${OS_CONF_FILE}|" contrib/excluder/excluder-template > $RPM_BUILD_ROOT/usr/sbin/%{name}-excluder
+sed -i "s|@@PACKAGE_LIST-VARIABLE@@|%{name} %{name}-clients %{name}-clients-redistributable %{name}-dockerregistry %{name}-master %{name}-node %{name}-pod %{name}-recycle %{name}-sdn-ovs %{name}-tests tuned-profiles-%{name}-node|" $RPM_BUILD_ROOT/usr/sbin/%{name}-excluder
+chmod 0744 $RPM_BUILD_ROOT/usr/sbin/%{name}-excluder
+
+# Install docker-excluder script
+sed "s|@@CONF_FILE-VARIABLE@@|${OS_CONF_FILE}|" contrib/excluder/excluder-template > $RPM_BUILD_ROOT/usr/sbin/%{name}-docker-excluder
+sed -i "s|@@PACKAGE_LIST-VARIABLE@@|docker*1.13* docker*1.14*|" $RPM_BUILD_ROOT/usr/sbin/%{name}-docker-excluder
+chmod 0744 $RPM_BUILD_ROOT/usr/sbin/%{name}-docker-excluder
+
 
 %files
 %doc README.md
@@ -320,10 +367,12 @@ install -p -m 644 contrib/completions/bash/* %{buildroot}%{_sysconfdir}/bash_com
 %{_sysconfdir}/bash_completion.d/atomic-enterprise
 %{_sysconfdir}/bash_completion.d/oadm
 %{_sysconfdir}/bash_completion.d/openshift
-%defattr(0700,-,-)
+%defattr(-,root,root,0700)
 %dir %config(noreplace) %{_sysconfdir}/origin
 %ghost %dir %config(noreplace) %{_sysconfdir}/origin
 %ghost %config(noreplace) %{_sysconfdir}/origin/.config_managed
+%{_mandir}/man1/oadm*
+%{_mandir}/man1/openshift*
 
 %pre
 # If /etc/openshift exists and /etc/origin doesn't, symlink it to /etc/origin
@@ -338,15 +387,16 @@ if [ -d "%{_sharedstatedir}/openshift" ]; then
   fi
 fi
 
+%if 0%{build_tests}
 %files tests
 %{_libexecdir}/%{name}
 %{_libexecdir}/%{name}/extended.test
-
+%endif
 
 %files master
 %{_unitdir}/%{name}-master.service
 %config(noreplace) %{_sysconfdir}/sysconfig/%{name}-master
-%defattr(0700,-,-)
+%defattr(-,root,root,0700)
 %config(noreplace) %{_sysconfdir}/origin/master
 %ghost %config(noreplace) %{_sysconfdir}/origin/admin.crt
 %ghost %config(noreplace) %{_sysconfdir}/origin/admin.key
@@ -400,14 +450,19 @@ fi
 
 %files node
 %{_unitdir}/%{name}-node.service
+%{_sysconfdir}/systemd/system.conf.d/origin-accounting.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/%{name}-node
-%defattr(0700,-,-)
+%defattr(-,root,root,0700)
 %config(noreplace) %{_sysconfdir}/origin/node
 %ghost %config(noreplace) %{_sysconfdir}/origin/node/node-config.yaml
 %ghost %config(noreplace) %{_sysconfdir}/origin/.config_managed
 
 %post node
 %systemd_post %{name}-node.service
+# If accounting is not currently enabled systemd reexec
+if [[ `systemctl show docker %{name}-node | grep -q -e CPUAccounting=no -e MemoryAccounting=no; echo $?` == 0 ]]; then
+  systemctl daemon-reexec
+fi
 
 %preun node
 %systemd_preun %{name}-node.service
@@ -416,12 +471,13 @@ fi
 %systemd_postun
 
 %files sdn-ovs
-%dir %{_unitdir}/docker.service.d/
 %dir %{_unitdir}/%{name}-node.service.d/
+%dir %{_sysconfdir}/cni/net.d
+%dir /opt/cni/bin
 %{_bindir}/openshift-sdn-ovs
-%{_bindir}/openshift-sdn-docker-setup.sh
 %{_unitdir}/%{name}-node.service.d/openshift-sdn-ovs.conf
-%{_unitdir}/docker.service.d/docker-sdn-ovs.conf
+%{_sysconfdir}/cni/net.d/80-openshift-sdn.conf
+/opt/cni/bin/*
 
 %posttrans sdn-ovs
 # This path was installed by older packages but the directory wasn't owned by
@@ -458,6 +514,7 @@ fi
 %{_bindir}/oc
 %{_bindir}/kubectl
 %{_sysconfdir}/bash_completion.d/oc
+%{_mandir}/man1/oc*
 
 %if 0%{?make_redistributable}
 %files clients-redistributable
@@ -474,6 +531,32 @@ fi
 
 %files pod
 %{_bindir}/pod
+
+%files excluder
+/usr/sbin/%{name}-excluder
+
+%post excluder
+if [ "$1" -eq 1 ] ; then
+  %{name}-excluder exclude
+fi
+
+%preun excluder
+if [ "$1" -eq 0 ] ; then
+  /usr/sbin/%{name}-excluder unexclude
+fi
+
+%files docker-excluder
+/usr/sbin/%{name}-docker-excluder
+
+%post docker-excluder
+# we always want to run this, since the 
+#   package-list may be different with each version
+%{name}-docker-excluder exclude
+
+%preun docker-excluder
+# we always want to clear this out, since the 
+#   package-list may be different with each version
+/usr/sbin/%{name}-docker-excluder unexclude
 
 %changelog
 * Fri Sep 18 2015 Scott Dodson <sdodson@redhat.com> 0.2-9
