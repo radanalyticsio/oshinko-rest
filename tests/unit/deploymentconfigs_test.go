@@ -18,8 +18,8 @@ func (s *OshinkoUnitTestSuite) TestDeploymentConfig(c *check.C) {
 
 func (s *OshinkoUnitTestSuite) TestReplicas(c *check.C) {
 	newDeploymentConfig := deploymentconfigs.DeploymentConfig("name", "namespace")
-	expectedReplicas := 12345
-	newDeploymentConfig.Replicas(expectedReplicas)
+	expectedReplicas := int32(12345)
+	newDeploymentConfig.Replicas(int(expectedReplicas))
 	c.Assert(newDeploymentConfig.Spec.Replicas, check.Equals, expectedReplicas)
 }
 

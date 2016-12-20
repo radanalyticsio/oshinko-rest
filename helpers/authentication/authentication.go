@@ -57,7 +57,7 @@ func GetKubeClient() (*kclient.Client, error) {
 		}
 		return client, err
 	} else {
-		client, _, err := serverapi.GetKubeClient(info.GetKubeConfigPath())
+		client, _, err := serverapi.GetKubeClient(info.GetKubeConfigPath(), nil)
 		return client, err
 	}
 }
@@ -75,7 +75,7 @@ func GetOpenShiftClient() (*client.Client, error) {
 		}
 		return client, err
 	} else {
-		client, _, err := serverapi.GetOpenShiftClient(info.GetKubeConfigPath())
+		client, _, err := serverapi.GetOpenShiftClient(info.GetKubeConfigPath(), nil)
 		return client, err
 	}
 }

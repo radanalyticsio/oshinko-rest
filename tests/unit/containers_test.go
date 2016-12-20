@@ -70,8 +70,8 @@ func (s *OshinkoUnitTestSuite) TestContainerPorts(c *check.C) {
 }
 
 func (s *OshinkoUnitTestSuite) TestContainerPort(c *check.C) {
-	expectedName, expectedPort := "testname", 1234
-	newContainerPort := containers.ContainerPort(expectedName, expectedPort)
+	expectedName, expectedPort := "testname", int32(1234)
+	newContainerPort := containers.ContainerPort(expectedName, int(expectedPort))
 	c.Assert(newContainerPort.ContainerPort.Name, check.Equals, expectedName)
 	c.Assert(newContainerPort.ContainerPort.ContainerPort, check.Equals, expectedPort)
 }
@@ -92,8 +92,8 @@ func (s *OshinkoUnitTestSuite) TestSetName(c *check.C) {
 
 func (s *OshinkoUnitTestSuite) TestHostPort(c *check.C) {
 	newContainerPort := containers.ContainerPort("name", 1)
-	expectedHostPort := 12345
-	newContainerPort.HostPort(expectedHostPort)
+	expectedHostPort := int32(12345)
+	newContainerPort.HostPort(int(expectedHostPort))
 	c.Assert(newContainerPort.ContainerPort.HostPort, check.Equals, expectedHostPort)
 }
 

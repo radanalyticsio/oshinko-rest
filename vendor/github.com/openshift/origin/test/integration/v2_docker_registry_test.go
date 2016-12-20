@@ -1,5 +1,3 @@
-// +build integration
-
 package integration
 
 import (
@@ -11,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/docker/distribution/digest"
 	"github.com/docker/distribution/manifest"
@@ -21,6 +20,7 @@ import (
 	kapi "k8s.io/kubernetes/pkg/api"
 
 	"github.com/openshift/origin/pkg/cmd/dockerregistry"
+	cmdutil "github.com/openshift/origin/pkg/cmd/util"
 	"github.com/openshift/origin/pkg/cmd/util/tokencmd"
 	imageapi "github.com/openshift/origin/pkg/image/api"
 	testutil "github.com/openshift/origin/test/util"
@@ -51,10 +51,7 @@ func signedManifest(name string) ([]byte, digest.Digest, error) {
 	if err != nil {
 		return []byte{}, "", fmt.Errorf("error marshaling manifest: %s", err)
 	}
-	dgst, err := digest.FromBytes(manifestBytes)
-	if err != nil {
-		return []byte{}, "", fmt.Errorf("error calculating manifest digest: %s", err)
-	}
+	dgst := digest.FromBytes(manifestBytes)
 
 	jsonSignature, err := libtrust.NewJSONSignature(manifestBytes)
 	if err != nil {
@@ -75,6 +72,7 @@ func signedManifest(name string) ([]byte, digest.Digest, error) {
 
 func TestV2RegistryGetTags(t *testing.T) {
 	testutil.RequireEtcd(t)
+	defer testutil.DumpEtcdOnFailure(t)
 	_, clusterAdminKubeConfig, err := testserver.StartTestMasterAPI()
 	if err != nil {
 		t.Fatalf("error starting master: %v", err)
@@ -98,7 +96,8 @@ func TestV2RegistryGetTags(t *testing.T) {
 	}
 
 	config := `version: 0.1
-loglevel: debug
+log:
+  level: debug
 http:
   addr: 127.0.0.1:5000
 storage:
@@ -106,7 +105,11 @@ storage:
 auth:
   openshift:
 middleware:
+  registry:
+    - name: openshift
   repository:
+    - name: openshift
+  storage:
     - name: openshift
 `
 
@@ -117,6 +120,10 @@ middleware:
 	os.Setenv("DOCKER_REGISTRY_URL", "127.0.0.1:5000")
 
 	go dockerregistry.Execute(strings.NewReader(config))
+
+	if err := cmdutil.WaitForSuccessfulDial(false, "tcp", "127.0.0.1:5000", 100*time.Millisecond, 1*time.Second, 35); err != nil {
+		t.Fatal(err)
+	}
 
 	stream := imageapi.ImageStream{
 		ObjectMeta: kapi.ObjectMeta{
@@ -209,7 +216,7 @@ middleware:
 	if err != nil {
 		t.Fatalf("error getting imageStreamImage: %s", err)
 	}
-	if e, a := fmt.Sprintf("test@%s", dgst.Hex()[:7]), image.Name; e != a {
+	if e, a := fmt.Sprintf("test@%s", dgst.String()), image.Name; e != a {
 		t.Errorf("image name: expected %q, got %q", e, a)
 	}
 	if e, a := dgst.String(), image.Image.Name; e != a {
