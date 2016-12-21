@@ -10,14 +10,19 @@ import (
 	"strings"
 
 	client "github.com/fsouza/go-dockerclient"
-	"github.com/golang/glog"
+
 	"github.com/openshift/source-to-image/pkg/api"
 	"github.com/openshift/source-to-image/pkg/errors"
+	utilglog "github.com/openshift/source-to-image/pkg/util/glog"
 	"github.com/openshift/source-to-image/pkg/util/user"
 )
 
-// DockerImageReference points to a Docker image.
-type DockerImageReference struct {
+// glog is a placeholder until the builders pass an output stream down
+// client facing libraries should not be using glog
+var glog = utilglog.StderrLog
+
+// ImageReference points to a Docker image.
+type ImageReference struct {
 	Registry  string
 	Namespace string
 	Name      string
@@ -35,9 +40,9 @@ const (
 // image name and a given set of client authentication objects.
 func GetImageRegistryAuth(auths *client.AuthConfigurations, imageName string) client.AuthConfiguration {
 	glog.V(5).Infof("Getting docker credentials for %s", imageName)
-	spec, err := ParseDockerImageReference(imageName)
+	spec, err := ParseImageReference(imageName)
 	if err != nil {
-		glog.Errorf("Failed to parse docker reference %s", imageName)
+		glog.V(0).Infof("error: Failed to parse docker reference %s", imageName)
 		return client.AuthConfiguration{}
 	}
 
@@ -57,7 +62,7 @@ func GetImageRegistryAuth(auths *client.AuthConfigurations, imageName string) cl
 func LoadImageRegistryAuth(dockerCfg io.Reader) *client.AuthConfigurations {
 	auths, err := client.NewAuthConfigurations(dockerCfg)
 	if err != nil {
-		glog.Errorf("Unable to load docker config")
+		glog.V(0).Infof("error: Unable to load docker config")
 		return nil
 	}
 	return auths
@@ -68,14 +73,15 @@ func LoadImageRegistryAuth(dockerCfg io.Reader) *client.AuthConfigurations {
 func LoadAndGetImageRegistryAuth(dockerCfg io.Reader, imageName string) client.AuthConfiguration {
 	auths, err := client.NewAuthConfigurations(dockerCfg)
 	if err != nil {
-		glog.Errorf("Unable to load docker config")
+		glog.V(0).Infof("error: Unable to load docker config")
 		return client.AuthConfiguration{}
 	}
 	return GetImageRegistryAuth(auths, imageName)
 }
 
 // StreamContainerIO takes data from the Reader and redirects to the log function (typically we pass in
-// glog.Error for stderr and glog.Info for stdout
+// glog.Error for stderr and glog.Info for stdout. The caller should wrap glog functions in a closure
+// to ensure accurate line numbers are reported: https://github.com/openshift/source-to-image/issues/558 .
 func StreamContainerIO(errStream io.Reader, errOutput *string, log func(...interface{})) {
 	scanner := bufio.NewReader(errStream)
 	for {
@@ -83,8 +89,8 @@ func StreamContainerIO(errStream io.Reader, errOutput *string, log func(...inter
 		if err != nil {
 			// we're ignoring ErrClosedPipe, as this is information
 			// the docker container ended streaming logs
-			if glog.V(2) && err != io.ErrClosedPipe && err != io.EOF {
-				glog.Errorf("Error reading docker stderr, %v", err)
+			if glog.Is(2) && err != io.ErrClosedPipe && err != io.EOF {
+				glog.V(0).Infof("error: Error reading docker stderr, %v", err)
 			}
 			break
 		}
@@ -95,13 +101,11 @@ func StreamContainerIO(errStream io.Reader, errOutput *string, log func(...inter
 	}
 }
 
-// ParseDockerImageReference parses a Docker pull spec string into a
-// DockerImageReference.
-// FIXME: This code was copied from OpenShift repository
-func ParseDockerImageReference(spec string) (DockerImageReference, error) {
-	var (
-		ref DockerImageReference
-	)
+// ParseImageReference parses a Docker pull spec string into a ImageReference.
+// FIXME: This code was copied from OpenShift repository.
+func ParseImageReference(spec string) (ImageReference, error) {
+	var ref ImageReference
+
 	// TODO replace with docker version once docker/docker PR11109 is merged upstream
 	stream, tag, id := parseRepositoryTag(spec)
 
@@ -208,7 +212,7 @@ func CheckAllowedUser(d Docker, imageName string, uids user.RangeList, isOnbuild
 	}
 	imageUser := extractUser(imageUserSpec)
 	if !user.IsUserAllowed(imageUser, &uids) {
-		return errors.NewBuilderUserNotAllowedError(imageName, false)
+		return errors.NewUserNotAllowedError(imageName, false)
 	}
 	if isOnbuild {
 		cmds, err := d.GetOnBuild(imageName)
@@ -216,7 +220,7 @@ func CheckAllowedUser(d Docker, imageName string, uids user.RangeList, isOnbuild
 			return err
 		}
 		if !isOnbuildAllowed(cmds, &uids) {
-			return errors.NewBuilderUserNotAllowedError(imageName, true)
+			return errors.NewUserNotAllowedError(imageName, true)
 		}
 	}
 	return nil
@@ -259,6 +263,20 @@ func IsReachable(config *api.Config) bool {
 	return d.Ping() == nil
 }
 
+func pullAndCheck(image string, docker Docker, pullPolicy api.PullPolicy, config *api.Config, forcePull bool) (*PullResult, error) {
+	r, err := PullImage(image, docker, pullPolicy, forcePull)
+	if err != nil {
+		return nil, err
+	}
+
+	err = CheckAllowedUser(docker, image, config.AllowedUIDs, r.OnBuild)
+	if err != nil {
+		return nil, err
+	}
+
+	return r, nil
+}
+
 // GetBuilderImage processes the config and performs operations necessary to make
 // the Docker image specified as BuilderImage available locally.
 // It returns information about the base image, containing metadata necessary
@@ -269,17 +287,31 @@ func GetBuilderImage(config *api.Config) (*PullResult, error) {
 		return nil, err
 	}
 
-	r, err := PullImage(config.BuilderImage, d, config.BuilderPullPolicy, config.ForcePull)
+	return pullAndCheck(config.BuilderImage, d, config.BuilderPullPolicy, config, config.ForcePull)
+}
+
+// GetRebuildImage obtains the metadata information for the image
+// specified in a s2i rebuild operation.  Assumptions are made that
+// the build is available locally since it should have been previously built.
+func GetRebuildImage(config *api.Config) (*PullResult, error) {
+	d, err := New(config.DockerConfig, config.PullAuthentication)
 	if err != nil {
 		return nil, err
 	}
 
-	err = CheckAllowedUser(d, config.BuilderImage, config.AllowedUIDs, r.OnBuild)
-	if err != nil {
-		return nil, err
+	return pullAndCheck(config.Tag, d, config.BuilderPullPolicy, config, config.ForcePull)
+}
+
+// GetRuntimeImage processes the config and performs operations necessary to make
+// the Docker image specified as RuntimeImage available locally.
+func GetRuntimeImage(config *api.Config, docker Docker) error {
+	pullPolicy := config.RuntimeImagePullPolicy
+	if len(pullPolicy) == 0 {
+		pullPolicy = api.DefaultRuntimeImagePullPolicy
 	}
 
-	return r, nil
+	_, err := pullAndCheck(config.RuntimeImage, docker, pullPolicy, config, false)
+	return err
 }
 
 func GetDefaultDockerConfig() *api.DockerConfig {

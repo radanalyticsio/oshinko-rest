@@ -10,6 +10,7 @@ import (
 	middleware "github.com/go-openapi/runtime/middleware"
 	oclient "github.com/openshift/origin/pkg/client"
 	osa "github.com/radanalyticsio/oshinko-rest/helpers/authentication"
+	"github.com/radanalyticsio/oshinko-rest/helpers/clusterconfigs"
 	ocon "github.com/radanalyticsio/oshinko-rest/helpers/containers"
 	odc "github.com/radanalyticsio/oshinko-rest/helpers/deploymentconfigs"
 	oe "github.com/radanalyticsio/oshinko-rest/helpers/errors"
@@ -17,7 +18,6 @@ import (
 	opt "github.com/radanalyticsio/oshinko-rest/helpers/podtemplates"
 	"github.com/radanalyticsio/oshinko-rest/helpers/probes"
 	osv "github.com/radanalyticsio/oshinko-rest/helpers/services"
-	"github.com/radanalyticsio/oshinko-rest/helpers/clusterconfigs"
 	"github.com/radanalyticsio/oshinko-rest/models"
 	"github.com/radanalyticsio/oshinko-rest/restapi/operations/clusters"
 	kapi "k8s.io/kubernetes/pkg/api"
@@ -99,7 +99,7 @@ func retrieveServiceURL(client kclient.ServiceInterface, stype, clustername stri
 		if stype == masterType {
 			scheme = "spark://"
 		}
-		return scheme + srv.Name + ":" + strconv.Itoa(srv.Spec.Ports[0].Port)
+		return scheme + srv.Name + ":" + strconv.Itoa(int(srv.Spec.Ports[0].Port))
 	}
 	return ""
 }
@@ -196,14 +196,14 @@ func singleClusterResponse(clustername string,
 		cluster.Cluster.Pods = append(cluster.Cluster.Pods, addpod(workers.Items[i]))
 	}
 
-        cluster.Cluster.Config.WorkerCount = config.WorkerCount
-        cluster.Cluster.Config.MasterCount = config.MasterCount
-        if config.SparkWorkerConfig != "" {
-                cluster.Cluster.Config.SparkWorkerConfig = config.SparkWorkerConfig
-        }
-        if config.SparkMasterConfig != "" {
-                cluster.Cluster.Config.SparkMasterConfig = config.SparkMasterConfig
-        }
+	cluster.Cluster.Config.WorkerCount = config.WorkerCount
+	cluster.Cluster.Config.MasterCount = config.MasterCount
+	if config.SparkWorkerConfig != "" {
+		cluster.Cluster.Config.SparkWorkerConfig = config.SparkWorkerConfig
+	}
+	if config.SparkMasterConfig != "" {
+		cluster.Cluster.Config.SparkMasterConfig = config.SparkMasterConfig
+	}
 	return cluster, nil
 }
 
@@ -396,7 +396,6 @@ func CreateClusterResponse(params clusters.CreateClusterParams) middleware.Respo
 		workerconfdir = sparkconfdir
 	}
 
-
 	// Create the master deployment config
 	dcc := osclient.DeploymentConfigs(namespace)
 	masterdc := sparkMaster(namespace, image, clustername, masterconfdir, finalconfig.SparkMasterConfig)
@@ -471,7 +470,7 @@ func waitForCount(client kclient.ReplicationControllerInterface, name string, co
 
 	for i := 0; i < 5; i++ {
 		r, _ := client.Get(name)
-		if r.Status.Replicas == count {
+		if int(r.Status.Replicas) == count {
 			return
 		}
 		time.Sleep(1 * time.Second)
@@ -479,7 +478,7 @@ func waitForCount(client kclient.ReplicationControllerInterface, name string, co
 }
 
 func deleteCluster(clustername, namespace string, osclient *oclient.Client, client *kclient.Client) (string, bool) {
-        var foundSomething bool = false
+	var foundSomething bool = false
 	info := []string{}
 	scalerepls := []string{}
 
@@ -718,8 +717,8 @@ func FindSingleClusterResponse(params clusters.FindSingleClusterParams) middlewa
 	if err != nil || wrepl == nil {
 		return reterr(fail(err, replMsgWorker, 500))
 	}
-        // TODO (tmckay) we should add the spark master and worker configuration values here.
-        // the most likely thing to do is store them in an annotation
+	// TODO (tmckay) we should add the spark master and worker configuration values here.
+	// the most likely thing to do is store them in an annotation
 	config := models.NewClusterConfig{MasterCount: int64(mrepl.Spec.Replicas), WorkerCount: int64(wrepl.Spec.Replicas)}
 	cluster, err := singleClusterResponse(clustername, pc, sc, config)
 	if err != nil {
@@ -816,14 +815,14 @@ func UpdateSingleClusterResponse(params clusters.UpdateSingleClusterParams) midd
 	}
 
 	rcc := client.ReplicationControllers(namespace)
-        repl, err := getReplController(rcc, clustername, workerType)
+	repl, err := getReplController(rcc, clustername, workerType)
 	if err != nil || repl == nil {
 		return reterr(fail(err, replMsgWorker, 500))
 	}
 
 	// If the current replica count does not match the request, update the replication controller
-	if repl.Spec.Replicas != workercount {
-		repl.Spec.Replicas = workercount
+	if repl.Spec.Replicas != int32(workercount) {
+		repl.Spec.Replicas = int32(workercount)
 		_, err = rcc.Update(repl)
 		if err != nil {
 			return reterr(fail(err, updateReplMsg, 500))
