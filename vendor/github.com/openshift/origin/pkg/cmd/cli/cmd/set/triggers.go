@@ -13,6 +13,7 @@ import (
 
 	kapi "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/meta"
+	"k8s.io/kubernetes/pkg/api/unversioned"
 	kcmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -43,26 +44,26 @@ Build configs support triggering off of image changes, config changes, and webho
 and generic). The config change trigger for a build config will only trigger the first build.`
 
 	triggersExample = `  # Print the triggers on the registry
-  $ %[1]s triggers dc/registry
+  %[1]s triggers dc/registry
 
   # Set all triggers to manual
-  $ %[1]s triggers dc/registry --manual
+  %[1]s triggers dc/registry --manual
 
   # Enable all automatic triggers
-  $ %[1]s triggers dc/registry --auto
+  %[1]s triggers dc/registry --auto
 
   # Reset the GitHub webhook on a build to a new, generated secret
-  $ %[1]s triggers bc/webapp --from-github
-  $ %[1]s triggers bc/webapp --from-webhook
+  %[1]s triggers bc/webapp --from-github
+  %[1]s triggers bc/webapp --from-webhook
 
   # Remove all triggers
-  $ %[1]s triggers bc/webapp --remove-all
+  %[1]s triggers bc/webapp --remove-all
 
   # Stop triggering on config change
-  $ %[1]s triggers dc/registry --from-config --remove
+  %[1]s triggers dc/registry --from-config --remove
 
   # Add an image trigger to a build config
-  $ %[1]s triggers bc/webapp --from-image=namespace1/image:latest`
+  %[1]s triggers bc/webapp --from-image=namespace1/image:latest`
 )
 
 type TriggersOptions struct {
@@ -78,8 +79,9 @@ type TriggersOptions struct {
 
 	Encoder runtime.Encoder
 
-	ShortOutput bool
-	Mapper      meta.RESTMapper
+	ShortOutput   bool
+	Mapper        meta.RESTMapper
+	OutputVersion unversioned.GroupVersion
 
 	PrintTable  bool
 	PrintObject func(runtime.Object) error
@@ -148,6 +150,16 @@ func NewCmdTriggers(fullName string, f *clientcmd.Factory, out, errOut io.Writer
 
 func (o *TriggersOptions) Complete(f *clientcmd.Factory, cmd *cobra.Command, args []string) error {
 	cmdNamespace, explicit, err := f.DefaultNamespace()
+	if err != nil {
+		return err
+	}
+
+	clientConfig, err := f.ClientConfig()
+	if err != nil {
+		return err
+	}
+
+	o.OutputVersion, err = kcmdutil.OutputVersion(cmd, clientConfig.GroupVersion)
 	if err != nil {
 		return err
 	}
@@ -271,24 +283,8 @@ func (o *TriggersOptions) Run() error {
 	if singular && len(patches) == 0 {
 		return fmt.Errorf("%s/%s is not a deployment config or build config", infos[0].Mapping.Resource, infos[0].Name)
 	}
-	if len(patches) == 0 {
-		return nil
-	}
-
 	if o.PrintObject != nil {
-		var infos []*resource.Info
-		for _, patch := range patches {
-			info := patch.Info
-			if patch.Err != nil {
-				fmt.Fprintf(o.Err, "error: %s/%s %v\n", info.Mapping.Resource, info.Name, patch.Err)
-				continue
-			}
-			infos = append(infos, info)
-		}
-		if len(infos) == 0 {
-			return cmdutil.ErrExit
-		}
-		object, err := resource.AsVersionedObject(infos, !singular, "", nil)
+		object, err := resource.AsVersionedObject(infos, !singular, o.OutputVersion, kapi.Codecs.LegacyCodec(o.OutputVersion))
 		if err != nil {
 			return err
 		}

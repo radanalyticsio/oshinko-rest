@@ -149,8 +149,8 @@ func ValidateIdentityProvider(identityProvider api.IdentityProvider, fldPath *fi
 	if len(identityProvider.Name) == 0 {
 		validationResults.AddErrors(field.Required(fldPath.Child("name"), ""))
 	}
-	if ok, err := validation.ValidateIdentityProviderName(identityProvider.Name); !ok {
-		validationResults.AddErrors(field.Invalid(fldPath.Child("name"), identityProvider.Name, err))
+	if reasons := validation.ValidateIdentityProviderName(identityProvider.Name); len(reasons) != 0 {
+		validationResults.AddErrors(field.Invalid(fldPath.Child("name"), identityProvider.Name, strings.Join(reasons, ", ")))
 	}
 
 	if len(identityProvider.MappingMethod) == 0 {
@@ -387,7 +387,10 @@ func validateGrantConfig(config api.GrantConfig, fldPath *field.Path) field.Erro
 	allErrs := field.ErrorList{}
 
 	if !api.ValidGrantHandlerTypes.Has(string(config.Method)) {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("method"), config.Method, fmt.Sprintf("must be one of: %v", api.ValidGrantHandlerTypes.List())))
+		allErrs = append(allErrs, field.NotSupported(fldPath.Child("method"), config.Method, api.ValidGrantHandlerTypes.List()))
+	}
+	if !api.ValidServiceAccountGrantHandlerTypes.Has(string(config.ServiceAccountMethod)) {
+		allErrs = append(allErrs, field.NotSupported(fldPath.Child("serviceAccountMethod"), config.ServiceAccountMethod, api.ValidServiceAccountGrantHandlerTypes.List()))
 	}
 
 	return allErrs

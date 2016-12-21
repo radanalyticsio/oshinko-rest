@@ -40,38 +40,38 @@ You can use '%[1]s status' to check the progress.`
 	newBuildExample = `
   # Create a build config based on the source code in the current git repository (with a public
   # remote) and a Docker image
-  $ %[1]s new-build . --docker-image=repo/langimage
+  %[1]s new-build . --docker-image=repo/langimage
 
   # Create a NodeJS build config based on the provided [image]~[source code] combination
-  $ %[1]s new-build openshift/nodejs-010-centos7~https://github.com/openshift/nodejs-ex.git
+  %[1]s new-build openshift/nodejs-010-centos7~https://github.com/openshift/nodejs-ex.git
 
   # Create a build config from a remote repository using its beta2 branch
-  $ %[1]s new-build https://github.com/openshift/ruby-hello-world#beta2
+  %[1]s new-build https://github.com/openshift/ruby-hello-world#beta2
 
   # Create a build config using a Dockerfile specified as an argument
-  $ %[1]s new-build -D $'FROM centos:7\nRUN yum install -y httpd'
+  %[1]s new-build -D $'FROM centos:7\nRUN yum install -y httpd'
 
   # Create a build config from a remote repository and add custom environment variables
-  $ %[1]s new-build https://github.com/openshift/ruby-hello-world RACK_ENV=development
+  %[1]s new-build https://github.com/openshift/ruby-hello-world RACK_ENV=development
 
   # Create a build config from a remote repository and inject the npmrc into a build
-  $ %[1]s new-build https://github.com/openshift/ruby-hello-world --build-secret npmrc:.npmrc
+  %[1]s new-build https://github.com/openshift/ruby-hello-world --build-secret npmrc:.npmrc
 
   # Create a build config that gets its input from a remote repository and another Docker image
-  $ %[1]s new-build https://github.com/openshift/ruby-hello-world --source-image=openshift/jenkins-1-centos7 --source-image-path=/var/lib/jenkins:tmp`
+  %[1]s new-build https://github.com/openshift/ruby-hello-world --source-image=openshift/jenkins-1-centos7 --source-image-path=/var/lib/jenkins:tmp`
 
 	newBuildNoInput = `You must specify one or more images, image streams, or source code locations to create a build.
 
 To build from an existing image stream tag or Docker image, provide the name of the image and
 the source code location:
 
-  $ %[1]s new-build openshift/nodejs-010-centos7~https://github.com/openshift/nodejs-ex.git
+  %[1]s new-build openshift/nodejs-010-centos7~https://github.com/openshift/nodejs-ex.git
 
 If you only specify the source repository location (local or remote), the command will look at
 the repo to determine the type, and then look for a matching image on your server or on the
 default Docker registry.
 
-  $ %[1]s new-build https://github.com/openshift/nodejs-ex.git
+  %[1]s new-build https://github.com/openshift/nodejs-ex.git
 
 will look for an image called "nodejs" in your current project, the 'openshift' project, or
 on the Docker Hub.
@@ -144,7 +144,7 @@ func NewCmdNewBuild(fullName string, f *clientcmd.Factory, in io.Reader, out io.
 // Complete sets any default behavior for the command
 func (o *NewBuildOptions) Complete(fullName string, f *clientcmd.Factory, c *cobra.Command, args []string, out io.Writer, in io.Reader) error {
 	o.Out = out
-	o.ErrOut = c.Out()
+	o.ErrOut = c.OutOrStderr()
 	o.Output = kcmdutil.GetFlagString(c, "output")
 	// Only output="" should print descriptions of intermediate steps. Everything
 	// else should print only some specific output (json, yaml, go-template, ...)
@@ -189,6 +189,8 @@ func (o *NewBuildOptions) Complete(fullName string, f *clientcmd.Factory, c *cob
 func (o *NewBuildOptions) Run() error {
 	config := o.Config
 	out := o.Out
+
+	checkGitInstalled(out)
 
 	result, err := config.Run()
 	if err != nil {

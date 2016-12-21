@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/glog"
 	"github.com/openshift/source-to-image/pkg/api"
 	"github.com/openshift/source-to-image/pkg/build"
 	"github.com/openshift/source-to-image/pkg/build/strategies/layered"
@@ -23,9 +22,15 @@ import (
 	"github.com/openshift/source-to-image/pkg/scripts"
 	"github.com/openshift/source-to-image/pkg/tar"
 	"github.com/openshift/source-to-image/pkg/util"
+	utilglog "github.com/openshift/source-to-image/pkg/util/glog"
 )
 
 var (
+	// DefaultEntrypoint is the default entry point used when starting containers
+	DefaultEntrypoint = []string{"/usr/bin/env"}
+
+	glog = utilglog.StderrLog
+
 	// List of directories that needs to be present inside working dir
 	workingDirs = []string{
 		api.UploadScripts,
@@ -35,26 +40,30 @@ var (
 	}
 )
 
-// STI strategy executes the STI build.
-// For more details about STI, visit https://github.com/openshift/source-to-image
+// STI strategy executes the S2I build.
+// For more details about S2I, visit https://github.com/openshift/source-to-image
 type STI struct {
-	config            *api.Config
-	result            *api.Result
-	postExecutor      dockerpkg.PostExecutor
-	installer         scripts.Installer
-	git               git.Git
-	fs                util.FileSystem
-	tar               tar.Tar
-	docker            dockerpkg.Docker
-	incrementalDocker dockerpkg.Docker
-	callbackInvoker   util.CallbackInvoker
-	requiredScripts   []string
-	optionalScripts   []string
-	externalScripts   map[string]bool
-	installedScripts  map[string]bool
-	scriptsURL        map[string]string
-	incremental       bool
-	sourceInfo        *api.SourceInfo
+	config                 *api.Config
+	result                 *api.Result
+	postExecutor           dockerpkg.PostExecutor
+	installer              scripts.Installer
+	runtimeInstaller       scripts.Installer
+	git                    git.Git
+	fs                     util.FileSystem
+	tar                    tar.Tar
+	docker                 dockerpkg.Docker
+	incrementalDocker      dockerpkg.Docker
+	runtimeDocker          dockerpkg.Docker
+	callbackInvoker        util.CallbackInvoker
+	requiredScripts        []string
+	optionalScripts        []string
+	optionalRuntimeScripts []string
+	externalScripts        map[string]bool
+	installedScripts       map[string]bool
+	scriptsURL             map[string]string
+	incremental            bool
+	sourceInfo             *api.SourceInfo
+	env                    []string
 
 	// Interfaces
 	preparer  build.Preparer
@@ -64,6 +73,12 @@ type STI struct {
 	source    build.Downloader
 	garbage   build.Cleaner
 	layered   build.Builder
+
+	// post executors steps
+	postExecutorStage            int
+	postExecutorFirstStageSteps  []postExecutorStep
+	postExecutorSecondStageSteps []postExecutorStep
+	postExecutorStepsContext     *postExecutorStepContext
 }
 
 // New returns the instance of STI builder strategy for the given config.
@@ -88,19 +103,35 @@ func New(config *api.Config, overrides build.Overrides) (*STI, error) {
 	tarHandler.SetExclusionPattern(regexp.MustCompile(config.ExcludeRegExp))
 
 	builder := &STI{
-		installer:         inst,
-		config:            config,
-		docker:            docker,
-		incrementalDocker: incrementalDocker,
-		git:               git.New(),
-		fs:                util.NewFileSystem(),
-		tar:               tarHandler,
-		callbackInvoker:   util.NewCallbackInvoker(),
-		requiredScripts:   []string{api.Assemble, api.Run},
-		optionalScripts:   []string{api.SaveArtifacts},
-		externalScripts:   map[string]bool{},
-		installedScripts:  map[string]bool{},
-		scriptsURL:        map[string]string{},
+		installer:              inst,
+		config:                 config,
+		docker:                 docker,
+		incrementalDocker:      incrementalDocker,
+		git:                    git.New(),
+		fs:                     util.NewFileSystem(),
+		tar:                    tarHandler,
+		callbackInvoker:        util.NewCallbackInvoker(),
+		requiredScripts:        []string{api.Assemble, api.Run},
+		optionalScripts:        []string{api.SaveArtifacts},
+		optionalRuntimeScripts: []string{api.AssembleRuntime},
+		externalScripts:        map[string]bool{},
+		installedScripts:       map[string]bool{},
+		scriptsURL:             map[string]string{},
+	}
+
+	if len(config.RuntimeImage) > 0 {
+		builder.runtimeDocker, err = dockerpkg.New(config.DockerConfig, config.RuntimeAuthentication)
+		if err != nil {
+			return builder, err
+		}
+
+		builder.runtimeInstaller = scripts.NewInstaller(
+			config.RuntimeImage,
+			config.ScriptsURL,
+			config.ScriptDownloadProxyConfig,
+			builder.runtimeDocker,
+			config.RuntimeAuthentication,
+		)
 	}
 
 	// The sources are downloaded using the Git downloader.
@@ -128,7 +159,10 @@ func New(config *api.Config, overrides build.Overrides) (*STI, error) {
 	builder.ignorer = &ignore.DockerIgnorer{}
 	builder.artifacts = builder
 	builder.scripts = builder
+
 	builder.postExecutor = builder
+	builder.initPostExecutorSteps()
+
 	return builder, err
 }
 
@@ -145,19 +179,16 @@ func (builder *STI) Build(config *api.Config) (*api.Result, error) {
 	}
 
 	if builder.incremental = builder.artifacts.Exists(config); builder.incremental {
-		tag := config.IncrementalFromTag
-		if len(tag) == 0 {
-			tag = config.Tag
-		}
+		tag := firstNonEmpty(config.IncrementalFromTag, config.Tag)
 		glog.V(1).Infof("Existing image for tag %s detected for incremental build", tag)
 	} else {
-		glog.V(1).Infof("Clean build will be performed")
+		glog.V(1).Info("Clean build will be performed")
 	}
 
 	glog.V(2).Infof("Performing source build from %s", config.Source)
 	if builder.incremental {
 		if err := builder.artifacts.Save(config); err != nil {
-			glog.Warningf("Clean build will be performed because of error saving previous build artifacts")
+			glog.Warning("Clean build will be performed because of error saving previous build artifacts")
 			glog.V(2).Infof("error: %v", err)
 		}
 	}
@@ -183,9 +214,9 @@ func (builder *STI) Build(config *api.Config) (*api.Result, error) {
 	return builder.result, nil
 }
 
-// Prepare prepares the source code and tar for build
-// NOTE, this func serves both the sti and onbuild strategies, as the OnBuild
-// struct Build func leverages the STI struct Prepare func directly below
+// Prepare prepares the source code and tar for build.
+// NOTE: this func serves both the sti and onbuild strategies, as the OnBuild
+// struct Build func leverages the STI struct Prepare func directly below.
 func (builder *STI) Prepare(config *api.Config) error {
 	var err error
 	if len(config.WorkingDir) == 0 {
@@ -199,14 +230,51 @@ func (builder *STI) Prepare(config *api.Config) error {
 		WorkingDir: config.WorkingDir,
 	}
 
+	if len(config.RuntimeImage) > 0 {
+		if err := dockerpkg.GetRuntimeImage(config, builder.runtimeDocker); err != nil {
+			glog.Errorf("Unable to pull runtime image %q: %v", config.RuntimeImage, err)
+			return err
+		}
+
+		// user didn't specify mapping, let's take it from the runtime image then
+		if len(builder.config.RuntimeArtifacts) == 0 {
+			mapping, err := builder.docker.GetAssembleInputFiles(config.RuntimeImage)
+			if err != nil {
+				return err
+			}
+			if len(mapping) == 0 {
+				return fmt.Errorf("No runtime artifacts to copy were specified")
+			}
+			for _, value := range strings.Split(mapping, ";") {
+				if err = builder.config.RuntimeArtifacts.Set(value); err != nil {
+					return fmt.Errorf("Couldn't parse %q label with value %q on image %q: %v",
+						dockerpkg.AssembleInputFilesLabel, mapping, config.RuntimeImage, err)
+				}
+			}
+		}
+		// we're validating values here to be sure that we're handling both of the cases of the invocation:
+		// from main() and as a method from OpenShift
+		for _, volumeSpec := range builder.config.RuntimeArtifacts {
+			if !path.IsAbs(volumeSpec.Source) {
+				return fmt.Errorf("Invalid runtime artifacts mapping: %q -> %q: source must be an absolute path", volumeSpec.Source, volumeSpec.Destination)
+			}
+			if path.IsAbs(volumeSpec.Destination) {
+				return fmt.Errorf("Invalid runtime artifacts mapping: %q -> %q: destination must be a relative path", volumeSpec.Source, volumeSpec.Destination)
+			}
+			if strings.HasPrefix(volumeSpec.Destination, "..") {
+				return fmt.Errorf("Invalid runtime artifacts mapping: %q -> %q: destination cannot start with '..'", volumeSpec.Source, volumeSpec.Destination)
+			}
+		}
+	}
+
 	// Setup working directories
 	for _, v := range workingDirs {
-		if err := builder.fs.MkdirAll(filepath.Join(config.WorkingDir, v)); err != nil {
+		if err = builder.fs.MkdirAll(filepath.Join(config.WorkingDir, v)); err != nil {
 			return err
 		}
 	}
 
-	// fetch sources, for their .sti/bin might contain sti scripts
+	// fetch sources, for their .s2i/bin might contain s2i scripts
 	if len(config.Source) > 0 {
 		if builder.sourceInfo, err = builder.source.Download(config); err != nil {
 			return err
@@ -221,6 +289,14 @@ func (builder *STI) Prepare(config *api.Config) error {
 	optional := builder.installer.InstallOptional(builder.optionalScripts, config.WorkingDir)
 
 	requiredAndOptional := append(required, optional...)
+
+	if len(config.RuntimeImage) > 0 && builder.runtimeInstaller != nil {
+		optionalRuntime := builder.runtimeInstaller.InstallOptional(builder.optionalRuntimeScripts, config.WorkingDir)
+		if err != nil {
+			return err
+		}
+		requiredAndOptional = append(requiredAndOptional, optionalRuntime...)
+	}
 
 	// If a ScriptsURL was specified, but no scripts were downloaded from it, throw an error
 	if len(config.ScriptsURL) > 0 {
@@ -255,99 +331,34 @@ func (builder *STI) SetScripts(required, optional []string) {
 	builder.optionalScripts = optional
 }
 
-func mergeLabels(newLabels, existingLabels map[string]string) map[string]string {
-	if existingLabels == nil {
-		return newLabels
-	}
-	result := map[string]string{}
-	for k, v := range existingLabels {
-		result[k] = v
-	}
-	for k, v := range newLabels {
-		result[k] = v
-	}
-	return result
-}
+// PostExecute allows to execute post-build actions after the Docker
+// container execution finishes.
+func (builder *STI) PostExecute(containerID, destination string) error {
+	builder.postExecutorStepsContext.containerID = containerID
+	builder.postExecutorStepsContext.destination = destination
 
-// PostExecute allows to execute post-build actions after the Docker build
-// finishes.
-func (builder *STI) PostExecute(containerID, location string) error {
-	var (
-		err             error
-		previousImageID string
-	)
+	stageSteps := builder.postExecutorFirstStageSteps
+	if builder.postExecutorStage > 0 {
+		stageSteps = builder.postExecutorSecondStageSteps
+	}
 
-	if builder.incremental && builder.config.RemovePreviousImage {
-		if previousImageID, err = builder.docker.GetImageID(builder.config.Tag); err != nil {
-			glog.Errorf("Error retrieving previous image's metadata: %v", err)
+	for _, step := range stageSteps {
+		if err := step.execute(builder.postExecutorStepsContext); err != nil {
+			glog.V(0).Info("error: Execution of post execute step failed")
+			return err
 		}
-	}
-
-	env, err := scripts.GetEnvironment(builder.config)
-	if err != nil {
-		glog.V(1).Infof("No user environment provided (%v)", err)
-	}
-
-	buildEnv := append(scripts.ConvertEnvironment(env), builder.generateConfigEnv()...)
-
-	runCmd := builder.scriptsURL[api.Run]
-	if strings.HasPrefix(runCmd, "image://") {
-		// scripts from inside of the image, we need to strip the image part
-		// NOTE: We use path.Join instead of filepath.Join to avoid converting the
-		// path to UNC (Windows) format as we always run this inside container.
-		runCmd = strings.TrimPrefix(runCmd, "image://")
-	} else {
-		// external scripts, in which case we're taking the directory to which they
-		// were extracted and append scripts dir and name
-		runCmd = path.Join(location, "scripts", api.Run)
-	}
-	existingLabels, err := builder.docker.GetLabels(builder.config.BuilderImage)
-	if err != nil {
-		glog.Errorf("Unable to read existing labels from current builder image %s", builder.config.BuilderImage)
-	}
-
-	buildImageUser, err := builder.docker.GetImageUser(builder.config.BuilderImage)
-	if err != nil {
-		return err
-	}
-
-	resultLabels := mergeLabels(util.GenerateOutputImageLabels(builder.sourceInfo, builder.config), existingLabels)
-	opts := dockerpkg.CommitContainerOptions{
-		Command:     append([]string{}, runCmd),
-		Env:         buildEnv,
-		ContainerID: containerID,
-		Repository:  builder.config.Tag,
-		User:        buildImageUser,
-		Labels:      resultLabels,
-	}
-
-	imageID, err := builder.docker.CommitContainer(opts)
-	if err != nil {
-		return errors.NewCommitError(builder.config.Tag, err)
-	}
-
-	builder.result.Success = true
-	builder.result.ImageID = imageID
-
-	if len(builder.config.Tag) > 0 {
-		glog.V(1).Infof("Successfully built %s", builder.config.Tag)
-	} else {
-		glog.V(1).Infof("Successfully built %s", imageID)
-	}
-
-	if builder.incremental && builder.config.RemovePreviousImage && previousImageID != "" {
-		glog.V(1).Infof("Removing previously-tagged image %s", previousImageID)
-		if err = builder.docker.RemoveImage(previousImageID); err != nil {
-			glog.Errorf("Unable to remove previous image: %v", err)
-		}
-	}
-
-	if builder.config.CallbackURL != "" {
-		builder.result.Messages = builder.callbackInvoker.ExecuteCallback(builder.config.CallbackURL,
-			builder.result.Success, resultLabels, builder.result.Messages)
 	}
 
 	return nil
+}
+
+func createBuildEnvironment(config *api.Config) []string {
+	env, err := scripts.GetEnvironment(config)
+	if err != nil {
+		glog.V(3).Infof("No user environment provided (%v)", err)
+	}
+
+	return append(scripts.ConvertEnvironment(env), scripts.ConvertEnvironmentList(config.Environment)...)
 }
 
 // Exists determines if the current build supports incremental workflow.
@@ -363,10 +374,7 @@ func (builder *STI) Exists(config *api.Config) bool {
 		policy = api.DefaultPreviousImagePullPolicy
 	}
 
-	tag := config.IncrementalFromTag
-	if len(tag) == 0 {
-		tag = config.Tag
-	}
+	tag := firstNonEmpty(config.IncrementalFromTag, config.Tag)
 
 	result, err := dockerpkg.PullImage(tag, builder.incrementalDocker, policy, false)
 	if err != nil {
@@ -385,10 +393,8 @@ func (builder *STI) Save(config *api.Config) (err error) {
 		return err
 	}
 
-	image := config.IncrementalFromTag
-	if len(image) == 0 {
-		image = config.Tag
-	}
+	image := firstNonEmpty(config.IncrementalFromTag, config.Tag)
+
 	outReader, outWriter := io.Pipe()
 	defer outReader.Close()
 	defer outWriter.Close()
@@ -414,6 +420,7 @@ func (builder *STI) Save(config *api.Config) (err error) {
 	opts := dockerpkg.RunContainerOptions{
 		Image:           image,
 		User:            user,
+		Entrypoint:      DefaultEntrypoint,
 		ExternalScripts: builder.externalScripts[api.SaveArtifacts],
 		ScriptsURL:      config.ScriptsURL,
 		Destination:     config.Destination,
@@ -427,7 +434,7 @@ func (builder *STI) Save(config *api.Config) (err error) {
 		CapDrop:         config.DropCapabilities,
 	}
 
-	go dockerpkg.StreamContainerIO(errReader, nil, glog.Error)
+	go dockerpkg.StreamContainerIO(errReader, nil, func(a ...interface{}) { glog.Info(a...) })
 	err = builder.docker.RunContainer(opts)
 	if e, ok := err.(errors.ContainerError); ok {
 		return errors.NewSaveArtifactsError(image, e.Output, err)
@@ -439,12 +446,9 @@ func (builder *STI) Save(config *api.Config) (err error) {
 func (builder *STI) Execute(command string, user string, config *api.Config) error {
 	glog.V(2).Infof("Using image name %s", config.BuilderImage)
 
-	env, err := scripts.GetEnvironment(config)
-	if err != nil {
-		glog.V(1).Infof("No user environment provided (%v)", err)
-	}
-
-	buildEnv := append(scripts.ConvertEnvironment(env), builder.generateConfigEnv()...)
+	// we can't invoke this method before (for example in New() method)
+	// because of later initialization of config.WorkingDir
+	builder.env = createBuildEnvironment(config)
 
 	errOutput := ""
 	outReader, outWriter := io.Pipe()
@@ -460,9 +464,10 @@ func (builder *STI) Execute(command string, user string, config *api.Config) err
 	}
 
 	opts := dockerpkg.RunContainerOptions{
-		Image:  config.BuilderImage,
-		Stdout: outWriter,
-		Stderr: errWriter,
+		Image:      config.BuilderImage,
+		Entrypoint: DefaultEntrypoint,
+		Stdout:     outWriter,
+		Stderr:     errWriter,
 		// The PullImage is false because the PullImage function should be called
 		// before we run the container
 		PullImage:       false,
@@ -470,7 +475,7 @@ func (builder *STI) Execute(command string, user string, config *api.Config) err
 		ScriptsURL:      config.ScriptsURL,
 		Destination:     config.Destination,
 		Command:         command,
-		Env:             buildEnv,
+		Env:             builder.env,
 		User:            user,
 		PostExec:        builder.postExecutor,
 		NetworkMode:     string(config.DockerNetworkMode),
@@ -562,13 +567,15 @@ func (builder *STI) Execute(command string, user string, config *api.Config) err
 
 	go func(reader io.Reader) {
 		scanner := bufio.NewReader(reader)
+		// Precede build output with newline
+		glog.Info()
 		for {
 			text, err := scanner.ReadString('\n')
 			if err != nil {
 				// we're ignoring ErrClosedPipe, as this is information
 				// the docker container ended streaming logs
-				if glog.V(2) && err != io.ErrClosedPipe && err != io.EOF {
-					glog.Errorf("Error reading docker stdout, %v", err)
+				if glog.Is(2) && err != io.ErrClosedPipe && err != io.EOF {
+					glog.Errorf("Error reading docker stdout, %#v", err)
 				}
 				break
 			}
@@ -576,18 +583,16 @@ func (builder *STI) Execute(command string, user string, config *api.Config) err
 			if config.Quiet {
 				continue
 			}
-			// The log level > 3 forces to use glog instead of printing to stdout
-			if glog.V(3) {
-				glog.Info(text)
-				continue
-			}
-			fmt.Fprintf(os.Stdout, "%s\n", strings.TrimSpace(text))
+			glog.Info(strings.TrimSpace(text))
 		}
+		// Terminate build output with new line
+		glog.Info()
+
 	}(outReader)
 
-	go dockerpkg.StreamContainerIO(errReader, &errOutput, glog.Error)
+	go dockerpkg.StreamContainerIO(errReader, &errOutput, func(a ...interface{}) { glog.Info(a...) })
 
-	err = builder.docker.RunContainer(opts)
+	err := builder.docker.RunContainer(opts)
 	if util.IsTimeoutError(err) {
 		// Cancel waiting for source input if the container timeouts
 		wg.Done()
@@ -598,11 +603,60 @@ func (builder *STI) Execute(command string, user string, config *api.Config) err
 	return err
 }
 
-func (builder *STI) generateConfigEnv() (configEnv []string) {
-	for _, e := range builder.config.Environment {
-		configEnv = append(configEnv, strings.Join([]string{e.Name, e.Value}, "="))
+func (builder *STI) initPostExecutorSteps() {
+	builder.postExecutorStepsContext = &postExecutorStepContext{}
+	if len(builder.config.RuntimeImage) == 0 {
+		builder.postExecutorFirstStageSteps = []postExecutorStep{
+			&storePreviousImageStep{
+				builder: builder,
+				docker:  builder.docker,
+			},
+			&commitImageStep{
+				image:   builder.config.BuilderImage,
+				builder: builder,
+				docker:  builder.docker,
+			},
+			&reportSuccessStep{
+				builder: builder,
+			},
+			&removePreviousImageStep{
+				builder: builder,
+				docker:  builder.docker,
+			},
+			&invokeCallbackStep{
+				builder:         builder,
+				callbackInvoker: builder.callbackInvoker,
+			},
+		}
+	} else {
+		builder.postExecutorFirstStageSteps = []postExecutorStep{
+			&downloadFilesFromBuilderImageStep{
+				builder: builder,
+				docker:  builder.docker,
+				fs:      builder.fs,
+				tar:     builder.tar,
+			},
+			&startRuntimeImageAndUploadFilesStep{
+				builder: builder,
+				docker:  builder.docker,
+				fs:      builder.fs,
+			},
+		}
+		builder.postExecutorSecondStageSteps = []postExecutorStep{
+			&commitImageStep{
+				image:   builder.config.RuntimeImage,
+				builder: builder,
+				docker:  builder.docker,
+			},
+			&reportSuccessStep{
+				builder: builder,
+			},
+			&invokeCallbackStep{
+				builder:         builder,
+				callbackInvoker: builder.callbackInvoker,
+			},
+		}
 	}
-	return
 }
 
 func isMissingRequirements(text string) bool {
@@ -618,4 +672,13 @@ func includes(arr []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func firstNonEmpty(args ...string) string {
+	for _, value := range args {
+		if len(value) > 0 {
+			return value
+		}
+	}
+	return ""
 }

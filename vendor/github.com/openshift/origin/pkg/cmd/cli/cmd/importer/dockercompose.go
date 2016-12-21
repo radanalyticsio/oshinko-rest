@@ -34,13 +34,15 @@ During transformation fields in the compose syntax that are not relevant when ru
 a containerized platform will be ignored and a warning printed.
 
 The command will create objects unless you pass the -o yaml or --as-template flags to generate a
-configuration file for later use.`
+configuration file for later use.
+
+Experimental: This command is under active development and may change without notice.`
 
 	dockerComposeExample = `  # Import a docker-compose.yml file into OpenShift
-  $ %[1]s docker-compose -f ./docker-compose.yml
+  %[1]s docker-compose -f ./docker-compose.yml
 
 	# Turn a docker-compose.yml file into a template
-  $ %[1]s docker-compose -f ./docker-compose.yml -o yaml --as-template
+  %[1]s docker-compose -f ./docker-compose.yml -o yaml --as-template
 `
 
 	DockerComposeV1GeneratorName = "docker-compose/v1"
@@ -74,7 +76,7 @@ func NewCmdDockerCompose(fullName string, f *clientcmd.Factory, in io.Reader, ou
 	}
 	cmd := &cobra.Command{
 		Use:     "docker-compose -f COMPOSEFILE",
-		Short:   "Import a docker-compose.yml project into OpenShift",
+		Short:   "Import a docker-compose.yml project into OpenShift (experimental)",
 		Long:    dockerComposeLong,
 		Example: fmt.Sprintf(dockerComposeExample, fullName),
 		Run: func(cmd *cobra.Command, args []string) {
@@ -148,6 +150,10 @@ func (o *DockerComposeOptions) Run() error {
 		return err
 	}
 
+	template.ObjectLabels = map[string]string{
+		"compose": template.Name,
+	}
+
 	// all the types generated into the template should be known
 	if errs := app.AsVersionedObjects(template.Objects, kapi.Scheme, kapi.Scheme, o.OutputVersions...); len(errs) > 0 {
 		for _, err := range errs {
@@ -175,7 +181,7 @@ func (o *DockerComposeOptions) Run() error {
 		appcmd.DescribeGeneratedTemplate(o.Action.Out, "", result, o.Namespace)
 	}
 
-	if errs := o.Action.WithMessage("Importing compose file", "creating").Run(&kapi.List{Items: result.Objects}, o.Namespace); len(errs) > 0 {
+	if errs := o.Action.WithMessage("Importing compose file", "created").Run(&kapi.List{Items: result.Objects}, o.Namespace); len(errs) > 0 {
 		return cmdutil.ErrExit
 	}
 	return nil

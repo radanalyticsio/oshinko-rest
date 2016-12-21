@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/golang/glog"
 	"github.com/openshift/source-to-image/pkg/api"
 )
 
@@ -28,7 +27,7 @@ func GetEnvironment(config *api.Config) ([]Environment, error) {
 		if _, err := os.Stat(envPath); os.IsNotExist(err) {
 			return nil, errors.New("no environment file found in application sources")
 		}
-		glog.Infof("DEPRECATED: Use .s2i/environment instead of .sti/environment")
+		glog.Info("DEPRECATED: Use .s2i/environment instead of .sti/environment")
 	}
 
 	f, err := os.Open(envPath)
@@ -57,12 +56,20 @@ func GetEnvironment(config *api.Config) ([]Environment, error) {
 		result = append(result, e)
 	}
 
-	glog.Infof("Setting %d environment variables provided by environment file in sources", len(result))
+	glog.V(1).Infof("Setting %d environment variables provided by environment file in sources", len(result))
 	return result, scanner.Err()
 }
 
 // ConvertEnvironment converts the []Environment to "key=val" strings
 func ConvertEnvironment(env []Environment) (result []string) {
+	for _, e := range env {
+		result = append(result, fmt.Sprintf("%s=%s", e.Name, e.Value))
+	}
+	return
+}
+
+// ConvertEnvironmentList converts the EnvironmentList to "key=val" strings
+func ConvertEnvironmentList(env api.EnvironmentList) (result []string) {
 	for _, e := range env {
 		result = append(result, fmt.Sprintf("%s=%s", e.Name, e.Value))
 	}

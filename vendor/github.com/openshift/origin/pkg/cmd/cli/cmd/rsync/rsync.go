@@ -34,10 +34,10 @@ for the copy.`
 
 	rsyncExample = `
   # Synchronize a local directory with a pod directory
-  $ %[1]s ./local/dir/ POD:/remote/dir
+  %[1]s ./local/dir/ POD:/remote/dir
 
   # Synchronize a pod directory with a local directory
-  $ %[1]s POD:/remote/dir/ ./local/dir`
+  %[1]s POD:/remote/dir/ ./local/dir`
 
 	noRsyncUnixWarning    = "WARNING: rsync command not found in path. Please use your package manager to install it.\n"
 	noRsyncWindowsWarning = "WARNING: rsync command not found in path. Download cwRsync for Windows and add it to your PATH.\n"
@@ -77,8 +77,8 @@ type RsyncOptions struct {
 	Delete        bool
 	Watch         bool
 
-	RsyncInclude  string
-	RsyncExclude  string
+	RsyncInclude  []string
+	RsyncExclude  []string
 	RsyncProgress bool
 	RsyncNoPerms  bool
 
@@ -113,8 +113,8 @@ func NewCmdRsync(name, parent string, f *clientcmd.Factory, out, errOut io.Write
 	// Flags for rsync options, Must match rsync flag names
 	cmd.Flags().BoolVarP(&o.Quiet, "quiet", "q", false, "Suppress non-error messages")
 	cmd.Flags().BoolVar(&o.Delete, "delete", false, "Delete files not present in source")
-	cmd.Flags().StringVar(&o.RsyncExclude, "exclude", "", "rsync - exclude files matching specified pattern")
-	cmd.Flags().StringVar(&o.RsyncInclude, "include", "", "rsync - include files matching specified pattern")
+	cmd.Flags().StringSliceVar(&o.RsyncExclude, "exclude", nil, "rsync - exclude files matching specified pattern")
+	cmd.Flags().StringSliceVar(&o.RsyncInclude, "include", nil, "rsync - include files matching specified pattern")
 	cmd.Flags().BoolVar(&o.RsyncProgress, "progress", false, "rsync - show progress during transfer")
 	cmd.Flags().BoolVar(&o.RsyncNoPerms, "no-perms", false, "rsync - do not transfer permissions")
 	cmd.Flags().BoolVarP(&o.Watch, "watch", "w", false, "Watch directory for changes and resync automatically")

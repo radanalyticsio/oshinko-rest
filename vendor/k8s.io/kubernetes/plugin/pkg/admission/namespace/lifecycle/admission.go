@@ -21,11 +21,14 @@ import (
 	"io"
 	"time"
 
+	"github.com/golang/glog"
+
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 
 	"k8s.io/kubernetes/pkg/admission"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util/sets"
@@ -34,9 +37,16 @@ import (
 
 const PluginName = "NamespaceLifecycle"
 
+// how long to wait for a missing namespace before re-checking the cache (and then doing a live lookup)
+// this accomplishes two things:
+// 1. It allows a watch-fed cache time to observe a namespace creation event
+// 2. It allows time for a namespace creation to distribute to members of a storage cluster,
+//    so the live lookup has a better chance of succeeding even if it isn't performed against the leader.
+const missingNamespaceWait = 50 * time.Millisecond
+
 func init() {
 	admission.RegisterPlugin(PluginName, func(client clientset.Interface, config io.Reader) (admission.Interface, error) {
-		return NewLifecycle(client, sets.NewString(api.NamespaceDefault)), nil
+		return NewLifecycle(client, sets.NewString(api.NamespaceDefault, api.NamespaceSystem)), nil
 	})
 }
 
@@ -74,19 +84,33 @@ func (l *lifecycle) Admit(a admission.Attributes) (err error) {
 		return nil
 	}
 
-	namespaceObj, exists, err := l.store.Get(&api.Namespace{
-		ObjectMeta: api.ObjectMeta{
-			Name:      a.GetNamespace(),
-			Namespace: "",
-		},
-	})
+	// always allow access review checks.  Returning status about the namespace would be leaking information
+	if isAccessReview(a) {
+		return nil
+	}
+
+	namespaceObj, exists, err := l.store.Get(&api.Namespace{ObjectMeta: api.ObjectMeta{Name: a.GetNamespace()}})
 	if err != nil {
 		return errors.NewInternalError(err)
 	}
 
+	if !exists && a.GetOperation() == admission.Create {
+		// give the cache time to observe the namespace before rejecting a create.
+		// this helps when creating a namespace and immediately creating objects within it.
+		time.Sleep(missingNamespaceWait)
+		namespaceObj, exists, err = l.store.Get(&api.Namespace{ObjectMeta: api.ObjectMeta{Name: a.GetNamespace()}})
+		if err != nil {
+			return errors.NewInternalError(err)
+		}
+		if exists {
+			glog.V(4).Infof("found %s in cache after waiting", a.GetNamespace())
+		}
+	}
+
 	// refuse to operate on non-existent namespaces
 	if !exists {
-		// in case of latency in our caches, make a call direct to storage to verify that it truly exists or not
+		// as a last resort, make a call directly to storage
+		// this also benefits from the Sleep() above allowing for propagation in HA storage cases
 		namespaceObj, err = l.client.Core().Namespaces().Get(a.GetNamespace())
 		if err != nil {
 			if errors.IsNotFound(err) {
@@ -94,6 +118,7 @@ func (l *lifecycle) Admit(a admission.Attributes) (err error) {
 			}
 			return errors.NewInternalError(err)
 		}
+		glog.V(4).Infof("found %s via storage lookup", a.GetNamespace())
 	}
 
 	// ensure that we're not trying to create objects in terminating namespaces
@@ -133,4 +158,17 @@ func NewLifecycle(c clientset.Interface, immortalNamespaces sets.String) admissi
 		store:              store,
 		immortalNamespaces: immortalNamespaces,
 	}
+}
+
+// TODO move this upstream once they have namespaced access review checks
+var accessReviewResources = map[unversioned.GroupResource]bool{
+	unversioned.GroupResource{Group: "", Resource: "subjectaccessreviews"}:       true,
+	unversioned.GroupResource{Group: "", Resource: "localsubjectaccessreviews"}:  true,
+	unversioned.GroupResource{Group: "", Resource: "resourceaccessreviews"}:      true,
+	unversioned.GroupResource{Group: "", Resource: "localresourceaccessreviews"}: true,
+	unversioned.GroupResource{Group: "", Resource: "selfsubjectrulesreviews"}:    true,
+}
+
+func isAccessReview(a admission.Attributes) bool {
+	return accessReviewResources[a.GetResource().GroupResource()]
 }
