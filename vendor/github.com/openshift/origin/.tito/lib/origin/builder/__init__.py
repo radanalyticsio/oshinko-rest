@@ -27,7 +27,7 @@ class OriginBuilder(Builder):
 
     def _get_rpmbuild_dir_options(self):
         git_hash = get_latest_commit()
-        cmd = '. ./hack/common.sh ; echo $(os::build::ldflags)'
+        cmd = '. ./hack/common.sh ; OS_ROOT=$(pwd) ; echo $(os::build::ldflags)'
         ldflags = run_command("bash -c '{0}'".format(cmd))
 
         return ('--define "_topdir %s" --define "_sourcedir %s" --define "_builddir %s" '
@@ -55,16 +55,30 @@ class OriginBuilder(Builder):
             )
             # Custom Openshift v3 stuff follows, everything above is the standard
             # builder
-            cmd = '. ./hack/common.sh ; echo $(os::build::ldflags)'
-            ldflags = run_command("bash -c '{0}'".format(cmd))
-            print("LDFLAGS::{0}".format(ldflags))
-            update_ldflags = \
-                    "sed -i 's|^%global ldflags .*$|%global ldflags {0}|' {1}".format(
-                        ' '.join([ldflag.strip() for ldflag in ldflags.split()]),
+
+            ## Fixup os_git_vars
+            cmd = '. ./hack/common.sh ; OS_ROOT=$(pwd) ; os::build::os_version_vars ; echo ${OS_GIT_COMMIT}'
+            os_git_commit = run_command("bash -c '{0}'".format(cmd))
+            cmd = '. ./hack/common.sh ; OS_ROOT=$(pwd) ; os::build::os_version_vars ; echo ${OS_GIT_VERSION}'
+            os_git_version = run_command("bash -c '{0}'".format(cmd))
+            os_git_version = os_git_version.replace('-dirty', '')
+            cmd = '. ./hack/common.sh ; OS_ROOT=$(pwd) ; os::build::os_version_vars ; echo ${OS_GIT_MAJOR}'
+            os_git_major = run_command("bash -c '{0}'".format(cmd))
+            cmd = '. ./hack/common.sh ; OS_ROOT=$(pwd) ; os::build::os_version_vars ; echo ${OS_GIT_MINOR}'
+            os_git_minor = run_command("bash -c '{0}'".format(cmd))
+            print("OS_GIT_COMMIT::{0}".format(os_git_commit))
+            print("OS_GIT_VERSION::{0}".format(os_git_version))
+            print("OS_GIT_MAJOR::{0}".format(os_git_major))
+            print("OS_GIT_MINOR::{0}".format(os_git_minor))
+            update_os_git_vars = \
+                    "sed -i 's|^%global os_git_vars .*$|%global os_git_vars OS_GIT_TREE_STATE='clean' OS_GIT_VERSION={0} OS_GIT_COMMIT={1} OS_GIT_MAJOR={2} OS_GIT_MINOR={3}|' {4}".format(
+                        os_git_version,
+                        os_git_commit,
+                        os_git_major,
+                        os_git_minor,
                         self.spec_file
                     )
-            # FIXME - output is never used
-            output = run_command(update_ldflags)
+            output = run_command(update_os_git_vars)
 
             # Add bundled deps for Fedora Guidelines as per:
             # https://fedoraproject.org/wiki/Packaging:Guidelines#Bundling_and_Duplication_of_system_libraries
@@ -81,12 +95,23 @@ class OriginBuilder(Builder):
                             bdep[1]
                         )
                     )
-            update_provides_list = \
-                "sed -i 's|^### AUTO-BUNDLED-GEN-ENTRY-POINT|{0}|' {1}".format(
-                    '\\n'.join(provides_list),
-                    self.spec_file
-                )
-            print(run_command(update_provides_list))
+
+            # Handle this in python because we have hit the upper bounds of line
+            # count for what we can pass into sed via subprocess because there
+            # are so many bundled libraries.
+            with open(self.spec_file, 'r') as spec_file_f:
+                spec_file_lines = spec_file_f.readlines()
+            with open(self.spec_file, 'w') as spec_file_f:
+                for line in spec_file_lines:
+                    if '### AUTO-BUNDLED-GEN-ENTRY-POINT' in line:
+                            spec_file_f.write(
+                                '\n'.join(
+                                    [provides.replace('"', '').replace("'", '')
+                                     for provides in provides_list]
+                                )
+                            )
+                    else:
+                        spec_file_f.write(line)
 
             self.build_version += ".git." + \
                 str(self.commit_count) + \
